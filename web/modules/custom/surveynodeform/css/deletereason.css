@@ -1,0 +1,6 @@
+#individual-data-ma-node-form .field-group-tabs-wrapper.group-individual-data-categories.field-group-tabs, #individual-data-node-form .field-group-tabs-wrapper.group-individual-data-categories.field-group-tabs,#individual-data-ga-node-form .field-group-tabs-wrapper.group-individual-data-categories.field-group-tabs, h1.page-header, .tabs--primary.nav.nav-tabs {display: none; }
+.main-container h3 { margin-top: 30px; }
+.btn.btn-primary { margin-bottom: 20px;}
+#individual-data-ma-node-form {display: block; }
+.node-type-individual-data-ma .main-container #edit-actions,.node-type-individual-data-ga .main-container #edit-actions { margin-top: 10px; }
+p#saveWarn, #logOutbut { display: none; }

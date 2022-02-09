@@ -1,0 +1,10 @@
+name = sdata - Reporting Period
+description = "Provides custom reporting period functionality for the sdata site."
+package = sdata
+core = 7.x
+dependencies[] = views
+files[] = views/sdata_rp_handler_submit_completed_field.inc
+files[] = views/sdata_rp_handler_check_ind_field.inc
+files[] = views/sdata_rp_handler_submit_completed_cie_field.inc
+files[] = views/sdata_rp_handler_check_ind_cie_field.inc
+files[] = views/sdata_rp_handler_count_completed_field.inc

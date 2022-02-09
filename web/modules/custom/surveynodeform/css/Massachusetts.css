@@ -1,0 +1,6 @@
+.node-type-individual-data-ma .vertical-tabs-panes fieldset.active {min-height: 900px;}
+.node-type-individual-data-ma .vertical-tabs-panes fieldset#edit-group_indv_comp.active {min-height: 1070px;}
+.main-container #edit-actions {width: 220px; position: relative;}
+.node-type-individual-data-ma .main-container #edit-actions {  height: 400px; margin-top: -500px;}
+.node-type-individual-data-ma div#reasonnopartic { top: 480px;}
+.page-node-edit.node-type-individual .tabs--primary.nav.nav-tabs { display: none;}

@@ -1,0 +1,1427 @@
+<?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+function surveynodeform_permission() {
+  return array(
+    'surveynodeform module' => array(
+      'title' => t('Survey node form permission'),
+  ));
+}
+
+function surveynodeform_menu() {
+  $items = array();
+  $items['admin/settings/surveynodeform'] = array(
+  'title' => 'Set state ranges',
+  'description' => 'Survey node form module settings',
+  'page callback' => 'drupal_get_form',
+  'access callback' => TRUE,
+  'page arguments' => array('surveynodeform_admin'),
+   'type' => MENU_CALLBACK,
+   'menu_name' => 'management',
+  'access arguments' => array('Survey node form permission'),
+ );
+ $items['prov/%/summary'] = array(
+ 'title' => 'Employment Supports Performance Outcome System Provider Report',
+ 'description' => 'Summary of individual data for current reporting period',
+ 'page callback' => 'surveynodeform_prov_summary',
+ 'access callback' => TRUE,
+ 'page arguments' => array(1),
+  'type' => MENU_CALLBACK,
+ 'access arguments' => array('Survey node form permission'),
+);
+  return $items;
+}
+
+function surveynodeform_query_alter($query) {
+  if ($query->hasTag('efq_debug') && module_exists('devel')) {
+    //dpm((string) $query);
+    //dpm($query->arguments());
+  }
+}
+
+
+function surveynodeform_get_prov_id($nid,$type) {
+  $query = new EntityFieldQuery();
+    $query->entityCondition('entity_type', 'node')
+      ->entityCondition('bundle', "$type")
+      ->entityCondition('entity_id', $nid, '=')
+      ->propertyCondition('status', NODE_PUBLISHED)
+      ->execute();
+      $result = $query->execute();
+      if (!isset($result['node'])) { return; }
+        else {
+        $datanode = array_keys($result['node']);
+    $mdind = node_load($datanode[0]);
+    $provid = $mdind->og_group_ref[LANGUAGE_NONE][0]['target_id'];
+    return $provid;
+  }
+}
+function surveynodeform_get_curr_rep_per($stateid) {
+  $state = node_load($stateid);
+  $current_reporting_period_nid = $state->field_current_reporting_period[LANGUAGE_NONE][0]['target_id'];
+  return $current_reporting_period_nid;
+}
+
+function surveynodeform_provider_statename($provid) {
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'node')
+      ->entityCondition('bundle', "provider")
+      ->entityCondition('entity_id', $provid)
+      ->propertyCondition('status', NODE_PUBLISHED);
+
+      $results = $query->execute();
+      $provnode = array_keys($results['node']);
+      $provgroup = node_load($provnode[0]);
+      $stateid = $provgroup->og_group_provider_state_ref[LANGUAGE_NONE][0]['target_id'];
+      $query2 = new EntityFieldQuery();
+      $query2->entityCondition('entity_type', 'node')
+          ->entityCondition('bundle', "state")
+          ->entityCondition('entity_id', $stateid)
+          ->propertyCondition('status', NODE_PUBLISHED);
+      $results2 = $query2->execute();
+      $statenode = array_keys($results2['node']);
+      $stategroup = node_load($statenode[0]);
+      $statename = array($stategroup->title,$stategroup->nid);
+  return $statename;
+}
+//new state: workaround to get state node id 
+function get_state_id($state) {
+  $query = new EntityFieldQuery;        
+  $result = $query
+    ->entityCondition('entity_type', 'node')
+    ->propertyCondition('type', 'state')
+    ->propertyCondition('title', $state)
+    ->execute();
+
+    $nids = array();
+  if (isset($result['node'])) {
+      $nids = array_keys($result['node']);
+  
+    return $nids[0];
+  }
+
+}
+
+function surveynodeform_prov_summary($provid) {
+  drupal_add_css(drupal_get_path('module', 'surveynodeform') . '/css/surveyform.css');
+  $statearray = surveynodeform_provider_statename($provid);
+  $stateid = $statearray[1];
+  $currepper = surveynodeform_get_curr_rep_per($stateid);
+  $georgiaid = get_state_id('Georgia');
+  $massid = get_state_id('Massachusetts');
+  $mdid = get_state_id('Maryland');
+  $query1 = new EntityFieldQuery();
+    $query1->entityCondition('entity_type', 'node')
+      ->entityCondition('bundle', "individual")
+        ->propertyCondition('status', NODE_PUBLISHED)
+        ->fieldCondition('og_group_ref', 'target_id', $provid);
+          $results1 = $query1->execute();
+          $personkeys = array_keys($results1['node']);
+          $provnode = node_load($provid);
+          $providername = $provnode->title;
+          $reportingnode = node_load($currepper);
+          $reportingperiod = date("F/j/Y", strtotime($reportingnode->field_rp_date_range[LANGUAGE_NONE][0]['value'])) . " to " . date("F/j/Y", strtotime($reportingnode->field_rp_date_range[LANGUAGE_NONE][0]['value2']));
+  
+  // Adding a new state: add state id
+  switch($stateid) {
+    case $massid:
+      $datanode = 'individual_data_ma';
+    break;
+    case $mdid:
+      $datanode = 'individual_data';
+    break;
+    
+    case $georgiaid:
+      $datanode = 'individual_data_ga';
+    break;
+    }
+
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'node')
+    ->entityCondition('bundle', "$datanode")
+    //  ->propertyCondition('status', NODE_PUBLISHED)
+      ->fieldCondition('og_group_ref', 'target_id', $provid)
+      ->fieldCondition('field_reporting_period', 'target_id', $currepper)
+      ->fieldCondition('field_individual', 'target_id', $personkeys, 'IN');
+        $results = $query->execute();
+        $firstarray = array_keys($results['node']);
+        $personids = array();
+  // new state: change stateid
+  switch($stateid) {
+    case $massid:
+      return surveynodeform_ma_prov_sum_results($statearray,$stateid,$currepper,$providername,$reportingperiod,$firstarray,$provid);
+    break;
+    case $mdid:
+      return surveynodeform_md_prov_sum_results($statearray,$stateid,$currepper,$providername,$reportingperiod,$firstarray,$provid);
+    break;
+    
+    case $georgiaid:
+      return surveynodeform_ga_prov_sum_results($statearray,$stateid,$currepper,$providername,$reportingperiod,$firstarray,$provid);
+    break;
+    }
+}
+// new state: duplicate surveynodeform_xx_prov_sum_results function
+function surveynodeform_ga_prov_sum_results($statearray,$stateid,$currepper,$providername,$reportingperiod,$firstarray,$provid) {
+
+  foreach($firstarray as $firstnode) {
+      $personode = node_load($firstnode);
+      $personids []= $personode->field_individual[LANGUAGE_NONE][0]['target_id'];
+    }
+  $datanode = array_intersect($personkeys,$personids);
+  $namearray = array('indcomp','grpinteg','selfemp','facbased','combased','facbasednonwork');
+  $headerarray = array(' ','Total Served
+  (unduplicated count)','Individual competitive job','Group integrated job','Self employment','Facility based job', 'Community based non work', 'Facility based non work');
+  $captions = array("Number participating by Activity","Hours of Participation by Activity","Wages for selected two-week span during the reporting period");
+  foreach($namearray as $key => $value) {
+    ${$value . 'count'} = 0;
+      ${$value . 'pct'} = 0;
+      ${$value . 'check'} = false;
+    //new state: change key based on number of categories
+    if ($key < 5){
+        ${$value . 'hrs'} = 0;
+      ${$value . 'hrspct'} = 0;
+      ${$value . 'meanhrs'} = 0;
+      }
+
+
+
+  }
+  
+  for ($i = 0 ; $i < 4 ; $i ++) {
+      ${$namearray[$i] . 'wage'} = 0;
+      ${$namearray[$i] . 'meanwage'} = 0;
+      if ($i != 3) {
+        ${$namearray[$i] . 'ptocount'} = 0;
+        ${$namearray[$i] . 'ptopct'} = 0;
+        
+      }
+     
+      if ($i != 0 && $i != 3) {
+        ${$namearray[$i] . 'setasidecount'} = 0;
+        ${$namearray[$i] . 'setasidepct'} = 0;
+      }
+
+  }
+
+
+  $hoursarray = array();
+  $wagesarray = array();
+  $ttlcount = 0;
+  $workttlcount = 0;
+  foreach($firstarray as $eachnode) {
+    $thisnode = node_load($eachnode);
+    
+  //Total counts
+  $indcompcheck = !$thisnode->field_indv_comp_hrs || $thisnode->field_indv_comp_hrs[LANGUAGE_NONE][0]['value'] == '' ? false:true;
+  if($indcompcheck) $indcompcount ++;
+  $grpintegcheck = !$thisnode->field_grp_integ_hrs || $thisnode->field_grp_integ_hrs[LANGUAGE_NONE][0]['value'] == '' ? false:true;
+  if($grpintegcheck) $grpintegcount ++;
+  $selfempcheck = !$thisnode->field_self_emp_hrs || $thisnode->field_self_emp_hrs[LANGUAGE_NONE][0]['value'] == '' ? false:true;
+  if($selfempcheck) $selfempcount ++;
+  $facbasedcheck = !$thisnode->field_shl_hrs || $thisnode->field_shl_hrs[LANGUAGE_NONE][0]['value'] == '' ? false:true;
+  if($facbasedcheck) $facbasedcount ++;
+  $combasedcheck = !$thisnode->field_com_non_wrk_hours || $thisnode->field_com_non_wrk_hours[LANGUAGE_NONE][0]['value'] == '' ? false:true;
+  if($combasedcheck) $combasedcount ++;
+  $facbasednonworkcheck = $thisnode->field_fac_non_work_partic && $thisnode->field_fac_non_work_partic[LANGUAGE_NONE][0]['value'] == 1 ? false : ($thisnode->field_fac_non_work_yn_partic && $thisnode->field_fac_non_work_yn_partic[LANGUAGE_NONE][0]['value'] == 1 ? true:false) ;
+  if($facbasednonworkcheck) $facbasednonworkcount ++;
+  if($indcompcheck || $indcontcheck || $grpintegcheck || $selfempcheck || $combasedcheck || $facbasedcheck) $workttlcount++;
+  if($indcompcheck || $indcontcheck || $grpintegcheck || $selfempcheck || $combasedcheck || $facbasedcheck || $facbasednonworkcheck) $ttlcount++;
+  //PTO counts
+  $indcompptocount += $thisnode->field_indv_comp_paid_time_off && $thisnode->field_indv_comp_paid_time_off[LANGUAGE_NONE][0]['value'] == 'yes' ? 1 :0;
+  $grpintegptocount += $thisnode->field_grp_integ_paid_time_off &&  $thisnode->field_grp_integ_paid_time_off[LANGUAGE_NONE][0]['value'] == 'yes' ? 1 :0;
+  $facbasedptocount += $thisnode->field_shl_paid_time_off && $thisnode->field_shl_paid_time_off[LANGUAGE_NONE][0]['value'] == 'yes' ? 1 :0;
+
+
+  //Hour counts
+  $indcomphrs+= $indcompcount != 0 && $thisnode->field_indv_comp_hrs ? $thisnode->field_indv_comp_hrs[LANGUAGE_NONE][0]['value'] : 0;
+  $grpinteghrs+= $grpintegcount != 0 && $thisnode->field_grp_integ_hrs  ? $thisnode->field_grp_integ_hrs[LANGUAGE_NONE][0]['value'] : 0;
+  $selfemphrs+= $selfempcount != 0 &&  $thisnode->field_self_emp_hrs? $thisnode->field_self_emp_hrs[LANGUAGE_NONE][0]['value'] : 0;
+  $facbasedhrs+= $facbasedcount != 0 && $thisnode->field_shl_hrs ? $thisnode->field_shl_hrs[LANGUAGE_NONE][0]['value'] : 0;
+  $combasedhrs+= $combasedcount != 0 && $thisnode->field_com_non_wrk_hours ? $thisnode->field_com_non_wrk_hours[LANGUAGE_NONE][0]['value'] : 0;
+
+
+  //Wages
+  $indcompwage +=  $indcompcount !=0 && $thisnode->field_indv_comp_gross_wages ? $thisnode->field_indv_comp_gross_wages[LANGUAGE_NONE][0]['value'] : 0;
+  $grpintegwage += $grpintegcount != 0 && $thisnode->field_grp_integ_gross_wages ? $thisnode->field_grp_integ_gross_wages[LANGUAGE_NONE][0]['value'] : 0;
+  $selfempwage += $selfempcount != 0 && $thisnode->field_self_emp_gross_income ? $thisnode->field_self_emp_gross_income[LANGUAGE_NONE][0]['value'] : 0;
+  $facbasedwage += $facbasedcount != 0 && $thisnode->field_shl_gross_wages ? $thisnode->field_shl_gross_wages[LANGUAGE_NONE][0]['value'] : 0;
+
+  }
+
+  //Occupation
+  $indcompoccupation = $thisnode->field_indv_comp_occupation && $thisnode->field_indv_comp_occupation[LANGUAGE_NONE][0]['value'] ? $thisnode->field_indv_comp_occupation[LANGUAGE_NONE][0]['value'] : '' ;
+  $indcomppct =  $indcompcount != 0 ? ($indcompcount/$ttlcount) * 100 : 0;
+  $indcomppct = $indcomppct != 0 ? number_format((float)$indcomppct, 1, '.', '') . "%" : " -- ";
+  $indcontpct =  $indcontcount != 0 ? ($indcontcount/$ttlcount) * 100 : 0;
+  $grpintegpct =  $grpintegcount != 0 ? ($grpintegcount/$ttlcount) * 100 : 0;
+  $grpintegpct = $grpintegpct != 0 ? number_format((float)$grpintegpct, 1, '.', '') . "%" : " -- ";
+  $selfemppct =  $selfempcount != 0 ? ($selfempcount/$ttlcount) * 100 : 0;
+  $selfemppct = $selfemppct != 0 ? number_format((float)$selfemppct, 1, '.', '') . "%" : " -- ";
+  $facbasedpct =  $facbasedcount != 0 ? ($facbasedcount/$ttlcount) * 100 : 0;
+  $facbasedpct = $facbasedpct != 0 ? number_format((float)$facbasedpct, 1, '.', '') . "%" : " -- ";
+  $combasedpct =  $combasedcount != 0 ? ($combasedcount/$ttlcount) * 100 : 0;
+  $combasedpct = $combasedpct != 0 ? number_format((float)$combasedpct, 1, '.', '') . "%" : " -- ";
+  $facbasednonworkpct = $facbasednonworkcount != 0 ? ($facbasednonworkcount/$ttlcount) * 100 : 0;
+  $facbasednonworkpct = $facbasednonworkpct != 0 ? number_format((float)$facbasednonworkpct, 1, '.', '') . "%" : " -- ";
+  $arraycount = array(array("Number participating in activity",$ttlcount,$indcompcount,$grpintegcount,$selfempcount,$facbasedcount,$combasedcount,$facbasednonworkcount),
+  array("Percent participating in activity",$ttlcount,$indcomppct,$grpintegpct,$selfemppct,$facbasedpct,$combasedpct,$facbasednonworkpct));
+  $ttlhour = $indcomphrs + $grpinteghrs + $selfemphrs + $facbasedhrs + $combasedhrs;
+  $ttlwage = $indcompwage + $grpintegwage + $selfempwage + $facbasedwage;
+  //Percentages
+  $indcomphrspct = $indcomphrs > 0 ? ($indcomphrs/$ttlhour) *100 : 0;
+  $indcomphrspct = $indcomphrspct > 0 ? number_format((float)$indcomphrspct, 1, '.', '') . "%" : " -- ";
+  $grpinteghrspct = $grpinteghrs > 0 ? ($grpinteghrs/$ttlhour) *100 : 0;
+  $grpinteghrspct = $grpinteghrspct > 0 ? number_format((float)$grpinteghrspct, 1, '.', '') . "%" : " -- ";
+  $selfemphrspct = $selfemphrs > 0 ? ($selfemphrs/$ttlhour) *100 : 0;
+  $selfemphrspct = $selfemphrspct > 0 ? number_format((float)$selfemphrspct, 1, '.', '') . "%" : " -- ";
+  $facbasedhrspct = $facbasedhrs > 0 ? ($facbasedhrs/$ttlhour) *100 : 0;
+  $facbasedhrspct = $facbasedhrspct > 0 ? number_format((float)$facbasedhrspct, 1, '.', '') . "%" : " -- ";
+  $combasedhrspct = $combasedhrs > 0 ? ($combasedhrs/$ttlhour) *100 : 0;
+  $combasedhrspct = $combasedhrspct > 0 ? number_format((float)$combasedhrspct, 1, '.', '') . "%" : " -- ";
+  $indcompmeanhrs = $indcomphrs > 0 ? $indcomphrs/$indcompcount: 0;
+  $indcompmeanhrs = $indcompmeanhrs > 0 ? number_format((float)$indcompmeanhrs, 1, '.', '') : " -- ";
+  $grpintegmeanhrs = $grpinteghrs > 0 ? $grpinteghrs/$grpintegcount: 0;
+  $grpintegmeanhrs = $grpintegmeanhrs > 0 ? number_format((float)$grpintegmeanhrs, 1, '.', '') : " -- ";
+  $selfempmeanhrs = $selfemphrs > 0 ? $selfemphrs/$selfempcount: 0;
+  $selfempmeanhrs = $selfempmeanhrs > 0 ? number_format((float)$selfempmeanhrs, 1, '.', '') : " -- ";
+  $facbasedmeanhrs = $facbasedhrs > 0 ? $facbasedhrs/$facbasedcount: 0;
+  $facbasedmeanhrs = $facbasedmeanhrs > 0 ? number_format((float)$facbasedmeanhrs, 1, '.', '') : " -- ";
+  $combasedmeanhrs = $combasedhrs > 0 ? $combasedhrs/$combasedcount: 0;
+  $combasedmeanhrs = $combasedmeanhrs > 0 ? number_format((float)$combasedmeanhrs, 1, '.', '') : " -- ";
+  $hoursarray = array(array("Mean hours per person participating in activity in two-week period*",$ttlcount,$indcompmeanhrs,$grpintegmeanhrs,$selfempmeanhrs . "*",$facbasedmeanhrs,$combasedmeanhrs),array("Percent of total hours in activity for two-week period",$ttlcount,$indcomphrspct,$grpinteghrspct,$selfemphrspct,$facbasedhrspct,$combasedhrspct));
+  $indcompmeanwage = $indcompwage > 0 ? $indcompwage/$indcompcount: 0;
+  $indcompmeanwage = $indcompmeanwage > 0 ? "$" . number_format((float)$indcompmeanwage, 2, '.', '') : " -- ";
+  $grpintegmeanwage = $grpintegwage > 0 ? $grpintegwage/$grpintegcount: 0;
+  $grpintegmeanwage = $grpintegmeanwage > 0 ? "$" . number_format((float)$grpintegmeanwage, 2, '.', '') : " -- ";
+  $selfempmeanwage = $selfempwage > 0 ? $selfempwage/$selfempcount: 0;
+  $selfempmeanwage = $selfempmeanwage > 0 ? "$" . number_format((float)$selfempmeanwage, 2, '.', '') : " -- ";
+  $facbasedmeanwage = $facbasedwage > 0 ? $facbasedwage/$facbasedcount: 0;
+  $facbasedmeanwage = $facbasedmeanwage > 0 ? "$" . number_format((float)$facbasedmeanwage, 2, '.', '') : " -- ";
+  $indcompptopct = $indcompptocount > 0 ? ($indcompptocount/$indcompcount) * 100 : 0;
+  $indcompptopct = number_format((float)$indcompptopct, 1, '.', '') . "%";
+  $grpintegptopct = $grpintegptocount > 0 ? ($grpintegptocount/$grpintegcount) * 100 : 0;
+  $grpintegptopct = number_format((float)$grpintegptopct, 1, '.', '') . "%";
+  $facbasedptopct = $facbasedptocount > 0 ? ($facbasedptocount/$facbasedcount) * 100 : 0;
+  $facbasedptopct = number_format((float)$facbasedptopct, 1, '.', '') . "%";
+  $wagesarray = array(array("Mean two-week wage*",$ttlcount,$indcompmeanwage,$grpintegmeanwage,$selfempmeanwage . "*",$facbasedmeanwage),array("Percent earning paid time off"," -- ",$indcompptopct,$grpintegptopct," -- ",$facbasedptopct)
+  );
+  //new state: change below based on number of categories
+  $sixarray = array_slice($headerarray, 0, 7);
+  $fivearray = array_slice($headerarray,0,6);
+  $data = array(
+        '#type' => 'markup',
+        '#prefix' => "<div class=\"clearfix\"><a class=\"viewButton btn\" href=\"/\">Back to main page</a><a class=\"viewButton btn addInd\" href=\"/provider/$provid/individuals\" data-toggle=\"tooltip\" title=\"\" data-original-title=\"View a list of your individuals\">View list of individuals</a><a class=\"btn btn-danger\" href=\"/user/logout\">Log out</a></div>
+        <h3>Data for $providername for  a two-week period between the dates $reportingperiod</h3>",
+        '#markup' =>  surveynodeform_table($captions[0],$arraycount,$headerarray) . surveynodeform_table($captions[1],$hoursarray,$sixarray). surveynodeform_table($captions[2],$wagesarray,$fivearray),
+        '#suffix' => '<p style="padding-bottom: 20px">* Self-employment earnings are calculated for last three months. [hours are reported for the standard 2 week period]</p>',
+  );
+  return $data;
+
+
+}
+
+function surveynodeform_md_prov_sum_results($statearray,$stateid,$currepper,$providername,$reportingperiod,$firstarray,$provid) {
+
+  foreach($firstarray as $firstnode) {
+      $personode = node_load($firstnode);
+      $personids []= $personode->field_individual[LANGUAGE_NONE][0]['target_id'];
+    }
+  $datanode = array_intersect($personkeys,$personids);
+  $namearray = array('indcomp','indcont','grpinteg','selfemp','facbased','combased','facbasednonwork');
+  $headerarray = array(' ','Total Served
+  (unduplicated count)','Individual competitive job','Individual
+  contracted job','Group integrated job','Self employment','Facility based job', 'Community based non work', 'Facility based non work');
+  $captions = array("Number participating by Activity","Hours of Participation by Activity","Wages for selected two-week span during the reporting period");
+  foreach($namearray as $key => $value) {
+    ${$value . 'count'} = 0;
+      ${$value . 'pct'} = 0;
+      ${$value . 'check'} = false;
+
+    if ($key < 6){
+        ${$value . 'hrs'} = 0;
+      ${$value . 'hrspct'} = 0;
+      ${$value . 'meanhrs'} = 0;
+      }
+
+
+
+  }
+  for ($i = 0 ; $i < 5 ; $i ++) {
+      ${$namearray[$i] . 'wage'} = 0;
+      ${$namearray[$i] . 'meanwage'} = 0;
+      if ($i != 3) {
+        ${$namearray[$i] . 'ptocount'} = 0;
+        ${$namearray[$i] . 'ptopct'} = 0;
+      }
+      if ($i != 0 && $i != 3) {
+        ${$namearray[$i] . 'setasidecount'} = 0;
+        ${$namearray[$i] . 'setasidepct'} = 0;
+      }
+
+  }
+
+
+  $hoursarray = array();
+  $wagesarray = array();
+  $ttlcount = 0;
+  $workttlcount = 0;
+  foreach($firstarray as $eachnode) {
+    $thisnode = node_load($eachnode);
+    
+  //Total counts
+  $indcompcheck = !$thisnode->field_indv_comp_hrs || $thisnode->field_indv_comp_hrs[LANGUAGE_NONE][0]['value'] == '' ? false:true;
+  if($indcompcheck) $indcompcount ++;
+  $indcontcheck = !$thisnode->field_indv_cont_hrs || $thisnode->field_indv_cont_hrs[LANGUAGE_NONE][0]['value'] == '' ? false:true;
+  if($indcontcheck) $indcontcount++;
+  $grpintegcheck = !$thisnode->field_grp_integ_hrs || $thisnode->field_grp_integ_hrs[LANGUAGE_NONE][0]['value'] == '' ? false:true;
+  if($grpintegcheck) $grpintegcount ++;
+  $selfempcheck = !$thisnode->field_self_emp_hrs || $thisnode->field_self_emp_hrs[LANGUAGE_NONE][0]['value'] == '' ? false:true;
+  if($selfempcheck) $selfempcount ++;
+  $facbasedcheck = !$thisnode->field_shl_hrs || $thisnode->field_shl_hrs[LANGUAGE_NONE][0]['value'] == '' ? false:true;
+  if($facbasedcheck) $facbasedcount ++;
+  $combasedcheck = !$thisnode->field_com_non_wrk_hours || $thisnode->field_com_non_wrk_hours[LANGUAGE_NONE][0]['value'] == '' ? false:true;
+  if($combasedcheck) $combasedcount ++;
+  $facbasednonworkcheck = $thisnode->field_fac_non_work_partic && $thisnode->field_fac_non_work_partic[LANGUAGE_NONE][0]['value'] == 1 ? false : ($thisnode->field_fac_non_work_yn_partic && $thisnode->field_fac_non_work_yn_partic[LANGUAGE_NONE][0]['value'] == 1 ? true:false) ;
+  if($facbasednonworkcheck) $facbasednonworkcount ++;
+  if($indcompcheck || $indcontcheck || $grpintegcheck || $selfempcheck || $combasedcheck || $facbasedcheck) $workttlcount++;
+  if($indcompcheck || $indcontcheck || $grpintegcheck || $selfempcheck || $combasedcheck || $facbasedcheck || $facbasednonworkcheck) $ttlcount++;
+  //PTO counts
+  $indcompptocount += $thisnode->field_indv_comp_paid_time_off && $thisnode->field_indv_comp_paid_time_off[LANGUAGE_NONE][0]['value'] == 'yes' ? 1 :0;
+  $indcontptocount += $thisnode->field_indv_cont_paid_time_off && $thisnode->field_indv_cont_paid_time_off[LANGUAGE_NONE][0]['value'] == 'yes' ? 1 :0;
+  $grpintegptocount += $thisnode->field_grp_integ_paid_time_off &&  $thisnode->field_grp_integ_paid_time_off[LANGUAGE_NONE][0]['value'] == 'yes' ? 1 :0;
+  $facbasedptocount += $thisnode->field_shl_paid_time_off && $thisnode->field_shl_paid_time_off[LANGUAGE_NONE][0]['value'] == 'yes' ? 1 :0;
+
+  $indcontsetasidecount += $thisnode->field_indv_contr_set_aside && $thisnode->field_indv_contr_set_aside[LANGUAGE_NONE][0]['value'] == 'yes' ? 1 :0;
+  $grpintegsetasidecount += $thisnode->field_grp_integr_set_aside && $thisnode->field_grp_integr_set_aside[LANGUAGE_NONE][0]['value'] == 'yes' ? 1 :0;
+  $facbasedsetasidecount += $thisnode->field_shlt_set_aside && $thisnode->field_shlt_set_aside[LANGUAGE_NONE][0]['value'] == 'yes' ? 1 :0;
+
+
+  //Hour counts
+  $indcomphrs+= $indcompcount != 0 && $thisnode->field_indv_comp_hrs ? $thisnode->field_indv_comp_hrs[LANGUAGE_NONE][0]['value'] : 0;
+  $indconthrs+= $indcontcount != 0 && $thisnode->field_indv_cont_hrs ? $thisnode->field_indv_cont_hrs[LANGUAGE_NONE][0]['value'] : 0;
+  $grpinteghrs+= $grpintegcount != 0 && $thisnode->field_grp_integ_hrs  ? $thisnode->field_grp_integ_hrs[LANGUAGE_NONE][0]['value'] : 0;
+  $selfemphrs+= $selfempcount != 0 &&  $thisnode->field_self_emp_hrs? $thisnode->field_self_emp_hrs[LANGUAGE_NONE][0]['value'] : 0;
+  $facbasedhrs+= $facbasedcount != 0 && $thisnode->field_shl_hrs ? $thisnode->field_shl_hrs[LANGUAGE_NONE][0]['value'] : 0;
+  $combasedhrs+= $combasedcount != 0 && $thisnode->field_com_non_wrk_hours ? $thisnode->field_com_non_wrk_hours[LANGUAGE_NONE][0]['value'] : 0;
+
+
+  //Wages
+  $indcompwage +=  $indcompcount !=0 && $thisnode->field_indv_comp_gross_wages ? $thisnode->field_indv_comp_gross_wages[LANGUAGE_NONE][0]['value'] : 0;
+  $indcontwage +=  $indcontcount !=0 && $thisnode->field_indv_cont_gross_wages ? $thisnode->field_indv_cont_gross_wages[LANGUAGE_NONE][0]['value'] : 0;
+  $grpintegwage += $grpintegcount != 0 && $thisnode->field_grp_integ_gross_wages ? $thisnode->field_grp_integ_gross_wages[LANGUAGE_NONE][0]['value'] : 0;
+  $selfempwage += $selfempcount != 0 && $thisnode->field_self_emp_gross_income ? $thisnode->field_self_emp_gross_income[LANGUAGE_NONE][0]['value'] : 0;
+  $facbasedwage += $facbasedcount != 0 && $thisnode->field_shl_gross_wages ? $thisnode->field_shl_gross_wages[LANGUAGE_NONE][0]['value'] : 0;
+
+  }
+
+  $indcomppct =  $indcompcount != 0 ? ($indcompcount/$ttlcount) * 100 : 0;
+  $indcomppct = $indcomppct != 0 ? number_format((float)$indcomppct, 1, '.', '') . "%" : " -- ";
+  $indcontpct =  $indcontcount != 0 ? ($indcontcount/$ttlcount) * 100 : 0;
+  $indcontpct = $indcontpct != 0 ? number_format((float)$indcontpct, 1, '.', '') . "%" : " -- ";
+  $grpintegpct =  $grpintegcount != 0 ? ($grpintegcount/$ttlcount) * 100 : 0;
+  $grpintegpct = $grpintegpct != 0 ? number_format((float)$grpintegpct, 1, '.', '') . "%" : " -- ";
+  $selfemppct =  $selfempcount != 0 ? ($selfempcount/$ttlcount) * 100 : 0;
+  $selfemppct = $selfemppct != 0 ? number_format((float)$selfemppct, 1, '.', '') . "%" : " -- ";
+  $facbasedpct =  $facbasedcount != 0 ? ($facbasedcount/$ttlcount) * 100 : 0;
+  $facbasedpct = $facbasedpct != 0 ? number_format((float)$facbasedpct, 1, '.', '') . "%" : " -- ";
+  $combasedpct =  $combasedcount != 0 ? ($combasedcount/$ttlcount) * 100 : 0;
+  $combasedpct = $combasedpct != 0 ? number_format((float)$combasedpct, 1, '.', '') . "%" : " -- ";
+  $facbasednonworkpct = $facbasednonworkcount != 0 ? ($facbasednonworkcount/$ttlcount) * 100 : 0;
+  $facbasednonworkpct = $facbasednonworkpct != 0 ? number_format((float)$facbasednonworkpct, 1, '.', '') . "%" : " -- ";
+  $arraycount = array(array("Number participating in activity",$ttlcount,$indcompcount,$indcontcount,$grpintegcount,$selfempcount,$facbasedcount,$combasedcount,$facbasednonworkcount),
+  array("Percent participating in activity",$ttlcount,$indcomppct,$indcontpct,$grpintegpct,$selfemppct,$facbasedpct,$combasedpct,$facbasednonworkpct));
+  $ttlhour = $indcomphrs + $indconthrs + $grpinteghrs + $selfemphrs + $facbasedhrs + $combasedhrs;
+  $ttlwage = $indcompwage + $indcontwage + $grpintegwage + $selfempwage + $facbasedwage;
+  //Percentages
+  $indcomphrspct = $indcomphrs > 0 ? ($indcomphrs/$ttlhour) *100 : 0;
+  $indcomphrspct = $indcomphrspct > 0 ? number_format((float)$indcomphrspct, 1, '.', '') . "%" : " -- ";
+  $indconthrspct = $indconthrs > 0 ? ($indconthrs/$ttlhour) *100 : 0;
+  $indconthrspct = $indconthrspct > 0 ? number_format((float)$indconthrspct, 1, '.', '') . "%" : " -- ";
+  $grpinteghrspct = $grpinteghrs > 0 ? ($grpinteghrs/$ttlhour) *100 : 0;
+  $grpinteghrspct = $grpinteghrspct > 0 ? number_format((float)$grpinteghrspct, 1, '.', '') . "%" : " -- ";
+  $selfemphrspct = $selfemphrs > 0 ? ($selfemphrs/$ttlhour) *100 : 0;
+  $selfemphrspct = $selfemphrspct > 0 ? number_format((float)$selfemphrspct, 1, '.', '') . "%" : " -- ";
+  $facbasedhrspct = $facbasedhrs > 0 ? ($facbasedhrs/$ttlhour) *100 : 0;
+  $facbasedhrspct = $facbasedhrspct > 0 ? number_format((float)$facbasedhrspct, 1, '.', '') . "%" : " -- ";
+  $combasedhrspct = $combasedhrs > 0 ? ($combasedhrs/$ttlhour) *100 : 0;
+  $combasedhrspct = $combasedhrspct > 0 ? number_format((float)$combasedhrspct, 1, '.', '') . "%" : " -- ";
+  $indcompmeanhrs = $indcomphrs > 0 ? $indcomphrs/$indcompcount: 0;
+  $indcompmeanhrs = $indcompmeanhrs > 0 ? number_format((float)$indcompmeanhrs, 1, '.', '') : " -- ";
+  $indcontmeanhrs = $indconthrs > 0 ? $indconthrs/$indcontcount: 0;
+  $indcontmeanhrs = $indcontmeanhrs > 0 ? number_format((float)$indcontmeanhrs, 1, '.', '') : " -- ";
+  $grpintegmeanhrs = $grpinteghrs > 0 ? $grpinteghrs/$grpintegcount: 0;
+  $grpintegmeanhrs = $grpintegmeanhrs > 0 ? number_format((float)$grpintegmeanhrs, 1, '.', '') : " -- ";
+  $selfempmeanhrs = $selfemphrs > 0 ? $selfemphrs/$selfempcount: 0;
+  $selfempmeanhrs = $selfempmeanhrs > 0 ? number_format((float)$selfempmeanhrs, 1, '.', '') : " -- ";
+  $facbasedmeanhrs = $facbasedhrs > 0 ? $facbasedhrs/$facbasedcount: 0;
+  $facbasedmeanhrs = $facbasedmeanhrs > 0 ? number_format((float)$facbasedmeanhrs, 1, '.', '') : " -- ";
+  $combasedmeanhrs = $combasedhrs > 0 ? $combasedhrs/$combasedcount: 0;
+  $combasedmeanhrs = $combasedmeanhrs > 0 ? number_format((float)$combasedmeanhrs, 1, '.', '') : " -- ";
+  $hoursarray = array(array("Mean hours per person participating in activity in two-week period*",$ttlcount,$indcompmeanhrs,$indcontmeanhrs,$grpintegmeanhrs,$selfempmeanhrs . "*",$facbasedmeanhrs,$combasedmeanhrs),array("Percent of total hours in activity for two-week period",$ttlcount,$indcomphrspct,$indconthrspct,$grpinteghrspct,$selfemphrspct,$facbasedhrspct,$combasedhrspct));
+  $indcompmeanwage = $indcompwage > 0 ? $indcompwage/$indcompcount: 0;
+  $indcompmeanwage = $indcompmeanwage > 0 ? "$" . number_format((float)$indcompmeanwage, 2, '.', '') : " -- ";
+  $indcontmeanwage = $indcontwage > 0 ? $indcontwage/$indcontcount: 0;
+  $indcontmeanwage = $indcontmeanwage > 0 ? "$" . number_format((float)$indcontmeanwage, 2, '.', '') : " -- ";
+  $grpintegmeanwage = $grpintegwage > 0 ? $grpintegwage/$grpintegcount: 0;
+  $grpintegmeanwage = $grpintegmeanwage > 0 ? "$" . number_format((float)$grpintegmeanwage, 2, '.', '') : " -- ";
+  $selfempmeanwage = $selfempwage > 0 ? $selfempwage/$selfempcount: 0;
+  $selfempmeanwage = $selfempmeanwage > 0 ? "$" . number_format((float)$selfempmeanwage, 2, '.', '') : " -- ";
+  $facbasedmeanwage = $facbasedwage > 0 ? $facbasedwage/$facbasedcount: 0;
+  $facbasedmeanwage = $facbasedmeanwage > 0 ? "$" . number_format((float)$facbasedmeanwage, 2, '.', '') : " -- ";
+  $indcompptopct = $indcompptocount > 0 ? ($indcompptocount/$indcompcount) * 100 : 0;
+  $indcompptopct = number_format((float)$indcompptopct, 1, '.', '') . "%";
+  $indcontptopct = $indcontptocount > 0 ? ($indcontptocount/$indcontcount) * 100 : 0;
+  $indcontptopct = number_format((float)$indcontptopct, 1, '.', '') . "%";
+  $grpintegptopct = $grpintegptocount > 0 ? ($grpintegptocount/$grpintegcount) * 100 : 0;
+  $grpintegptopct = number_format((float)$grpintegptopct, 1, '.', '') . "%";
+  $facbasedptopct = $facbasedptocount > 0 ? ($facbasedptocount/$facbasedcount) * 100 : 0;
+  $facbasedptopct = number_format((float)$facbasedptopct, 1, '.', '') . "%";
+  $indcontsetasidepct = $indcontsetasidecount > 0 ? ($indcontsetasidecount/$indcontcount) * 100 : 0;
+  $indcontsetasidepct = number_format((float)$indcontsetasidepct, 1, '.', '') . "%";
+  $grpintegsetasidepct = $grpintegsetasidecount > 0 ? ($grpintegsetasidecount/$grpintegcount) * 100 : 0;
+  $grpintegsetasidepct = number_format((float)$grpintegsetasidepct, 1, '.', '') . "%";
+  $facbasedsetasidepct = $facbasedsetasidecount > 0 ? ($facbasedsetasidecount/$facbasedcount) * 100 : 0;
+  $facbasedsetasidepct = number_format((float)$facbasedsetasidepct, 1, '.', '') . "%";
+  $wagesarray = array(array("Mean two-week wage*",$ttlcount,$indcompmeanwage,$indcontmeanwage,$grpintegmeanwage,$selfempmeanwage . "*",$facbasedmeanwage),array("Percent earning paid time off"," -- ",$indcompptopct,$indcontptopct,$grpintegptopct," -- ",$facbasedptopct),array("Percent on set-aside contract"," "," -- ",$indconthrspct,$grpinteghrspct," -- ",$facbasedhrspct)
+  );
+  $sixarray = array_slice($headerarray, 0, 8);
+  $fivearray = array_slice($headerarray,0,7);
+  $data = array(
+        '#type' => 'markup',
+        '#prefix' => "<div class=\"clearfix\"><a class=\"viewButton btn\" href=\"/\">Back to main page</a><a class=\"viewButton btn addInd\" href=\"/provider/$provid/individuals\" data-toggle=\"tooltip\" title=\"\" data-original-title=\"View a list of your individuals\">View list of individuals</a><a class=\"btn btn-danger\" href=\"/user/logout\">Log out</a></div>
+        <h3>Data for $providername for  a two-week period between the dates $reportingperiod</h3>",
+        '#markup' =>  surveynodeform_table($captions[0],$arraycount,$headerarray) . surveynodeform_table($captions[1],$hoursarray,$sixarray). surveynodeform_table($captions[2],$wagesarray,$fivearray),
+        '#suffix' => '<p style="padding-bottom: 20px">* Self-employment earinings and hours are calculated for last three months.</p>',
+  );
+  return $data;
+
+
+}
+
+function surveynodeform_ma_prov_sum_results($statearray,$stateid,$currepper,$providername,$reportingperiod,$firstarray,$provid) {
+
+          foreach($firstarray as $firstnode) {
+             $personode = node_load($firstnode);
+              $personids []= $personode->field_individual[LANGUAGE_NONE][0]['target_id'];
+            }
+          $datanode = array_intersect($personkeys,$personids);
+          $namearray = array('indcomp','grpinteg','selfemp','jobsearch','wraparound');
+          $headerarray = array(' ','Total Served
+          (unduplicated count)','Individual employment','Group supported job','Self employment','Job search and exploration', 'Wrap-around services');
+          $captions = array("Number participating by Activity","Hours of Participation by Activity","Wages for selected two-week span during the reporting period");
+          foreach($namearray as $key => $value) {
+            ${$value . 'count'} = 0;
+             ${$value . 'pct'} = 0;
+
+            if ($key < 3){
+               ${$value . 'hrs'} = 0;
+              ${$value . 'hrspct'} = 0;
+             ${$value . 'meanhrs'} = 0;
+             ${$value . 'check'} = false;
+             }
+
+
+
+          }
+          for ($i = 0 ; $i < 3 ; $i ++) {
+             ${$namearray[$i] . 'wage'} = 0;
+             ${$namearray[$i] . 'meanwage'} = 0;
+             if ($i != 3) {
+               ${$namearray[$i] . 'ptocount'} = 0;
+               ${$namearray[$i] . 'ptopct'} = 0;
+             }
+             if ($i != 0 && $i != 3) {
+               ${$namearray[$i] . 'setasidecount'} = 0;
+               ${$namearray[$i] . 'setasidepct'} = 0;
+             }
+
+          }
+
+         
+          $hoursarray = array();
+          $wagesarray = array();
+          $ttlcount = 0;
+          $workcount = 0;
+          
+          foreach($firstarray as $eachnode) {
+            $thisnode = node_load($eachnode);
+            $indcompcheck = !$thisnode->field_indv_comp_hrs || $thisnode->field_indv_comp_hrs[LANGUAGE_NONE][0]['value'] == '' ? false:true;
+            if($indcompcheck) $indcompcount ++;
+            $grpintegcheck = !$thisnode->field_grp_integ_hrs || $thisnode->field_grp_integ_hrs[LANGUAGE_NONE][0]['value'] == '' ? false:true;
+            if($grpintegcheck) $grpintegcount ++;
+            $selfempcheck = !$thisnode->field_self_emp_hrs || $thisnode->field_self_emp_hrs[LANGUAGE_NONE][0]['value'] == '' ? false:true;
+            if($selfempcheck) $selfempcount ++;
+            $jobsearchcheck = $thisnode->field_job_search_partic && $thisnode->field_job_search_partic[LANGUAGE_NONE][0]['value'] == 1 ? false : (!$thisnode->field_job_search_job_dev_y_n[LANGUAGE_NONE][0]['value'] == 'yes' && !$thisnode->field_job_search_discov_plan_y_n[LANGUAGE_NONE][0]['value'] == 'yes' ? false: true) ;
+            if($jobsearchcheck) $jobsearchcount ++;
+            $wraparoundcheck = $thisnode->field_day_program_partic && $thisnode->field_day_program_partic[LANGUAGE_NONE][0]['value'] == 1 ? false : (!$thisnode->field_day_program_commun_y_n[LANGUAGE_NONE][0]['value'] == 'yes' && !$thisnode->field_day_program_dayhab_y_n[LANGUAGE_NONE][0]['value'] == 'yes' && !$thisnode->field_day_program_other_y_n[LANGUAGE_NONE][0]['value'] == 'yes' ? false:true) ;
+            if($wraparoundcheck) $wraparoundcount ++;
+            if($indcompcheck || $groupintegcheck || $selfempcheck) $workcount++;
+            if($indcompcheck ||$grpintegcheck || $selfempcheck || $jobsearchcheck || $wraparoundcheck) $ttlcount++;
+            //PTO counts
+            $indcompptocount += $thisnode->field_indv_paid_time_y_n && $thisnode->field_indv_paid_time_y_n[LANGUAGE_NONE][0]['value'] == 'yes' ? 1 :0;
+            $selfemphrs+= $selfempcount != 0 &&  $thisnode->field_self_emp_hrs? $thisnode->field_self_emp_hrs[LANGUAGE_NONE][0]['value'] : 0;
+            $indcomphrs+= $indcompcount != 0 && $thisnode->field_indv_comp_hrs ? $thisnode->field_indv_comp_hrs[LANGUAGE_NONE][0]['value'] : 0;
+            $grpinteghrs+= $grpintegcount != 0 && $thisnode->field_grp_integ_hrs  ? $thisnode->field_grp_integ_hrs[LANGUAGE_NONE][0]['value'] : 0;
+            $selfemphrs+= $selfempcount != 0 &&  $thisnode->field_self_emp_hrs? $thisnode->field_self_emp_hrs[LANGUAGE_NONE][0]['value'] : 0;
+            
+            //Wages
+            $indcompwage +=  $indcompcount !=0 && $thisnode->field_indv_comp_gross_wages ? $thisnode->field_indv_comp_gross_wages[LANGUAGE_NONE][0]['value'] : 0;
+            $grpintegwage += $grpintegcount != 0 && $thisnode->field_grp_integ_gross_wages ? $thisnode->field_grp_integ_gross_wages[LANGUAGE_NONE][0]['value'] : 0;
+            $selfempwage += $selfempcount != 0 && $thisnode->field_self_emp_gross_income ? $thisnode->field_self_emp_gross_income[LANGUAGE_NONE][0]['value'] : 0;
+            // print "$eachnode<br /> $indcompcount<br />$grpintegcount<br />$selfempcount<br />$jobsearchcount<br />$wraparoundcount<br /><strong>$ttlcount</strong>&nbsp;<br />";
+            
+       
+          }
+          $ttlhour = $indcomphrs + $grpinteghrs + $selfemphrs;
+          $ttlwage = $indcompwage + $grpintegwage + $selfempmeanwage;
+        $indcomppct =  $indcompcount != 0 ? ($indcompcount/$ttlcount) * 100 : 0;
+        $indcomppct = $indcomppct != 0 ? number_format((float)$indcomppct, 1, '.', '') . "%" : " -- ";
+            $grpintegpct =  $grpintegcount != 0 ? ($grpintegcount/$ttlcount) * 100 : 0;
+            $grpintegpct = $grpintegpct != 0 ? number_format((float)$grpintegpct, 1, '.', '') . "%" : " -- ";
+            $selfemppct =  $selfempcount != 0 ? ($selfempcount/$ttlcount) * 100 : 0;
+            $selfemppct = $selfemppct != 0 ? number_format((float)$selfemppct, 1, '.', '') . "%" : " -- ";
+            $jobsearchpct =  $jobsearchcount != 0 ? ($jobsearchcount/$ttlcount) * 100 : 0;
+            $jobsearchpct = $jobsearchpct != 0 ? number_format((float)$jobsearchpct, 1, '.', '') . "%" : " -- ";
+            $wraparoundpct =  $wraparoundcount != 0 ? ($wraparoundcount/$ttlcount) * 100 : 0;
+            $wraparoundpct = $wraparoundpct != 0 ? number_format((float)$wraparoundpct, 1, '.', '') . "%" : " -- ";
+           
+            
+            //Percentages
+            $indcomphrspct = $indcomphrs > 0 ? ($indcomphrs/$ttlhour) *100 : 0;
+            $indcomphrspct = $indcomphrspct > 0 ? number_format((float)$indcomphrspct, 1, '.', '') . "%" : " -- ";
+            $grpinteghrspct = $grpinteghrs > 0 ? ($grpinteghrs/$ttlhour) *100 : 0;
+            $grpinteghrspct = $grpinteghrspct > 0 ? number_format((float)$grpinteghrspct, 1, '.', '') . "%" : " -- ";
+            $selfemphrspct = $selfemphrs > 0 ? ($selfemphrs/$ttlhour) *100 : 0;
+            $selfemphrspct = $selfemphrspct > 0 ? number_format((float)$selfemphrspct, 1, '.', '') . "%" : " -- ";
+            $indcompmeanhrs = $indcomphrs > 0 ? $indcomphrs/$indcompcount: 0;
+            $indcompmeanhrs = $indcompmeanhrs > 0 ? number_format((float)$indcompmeanhrs, 1, '.', '') : " -- ";
+            $grpintegmeanhrs = $grpinteghrs > 0 ? $grpinteghrs/$grpintegcount: 0;
+            $grpintegmeanhrs = $grpintegmeanhrs > 0 ? number_format((float)$grpintegmeanhrs, 1, '.', '') : " -- ";
+            $selfempmeanhrs = $selfemphrs > 0 ? $selfemphrs/$selfempcount: 0;
+            $selfempmeanhrs = $selfempmeanhrs > 0 ? number_format((float)$selfempmeanhrs, 1, '.', '') : " -- ";
+            $indcompmeanwage = $indcompwage > 0 ? $indcompwage/$indcompcount: 0;
+            $indcompmeanwage = $indcompmeanwage > 0 ? "$" . number_format((float)$indcompmeanwage, 2, '.', '') : " -- ";
+            $grpintegmeanwage = $grpintegwage > 0 ? $grpintegwage/$grpintegcount: 0;
+            $grpintegmeanwage = $grpintegmeanwage > 0 ? "$" . number_format((float)$grpintegmeanwage, 2, '.', '') : " -- ";
+            $selfempmeanwage = $selfempwage > 0 ? $selfempwage/$selfempcount: 0;
+            $selfempmeanwage = $selfempmeanwage > 0 ? "$" . number_format((float)$selfempmeanwage, 2, '.', '') : " -- ";
+            $indcompptopct = $indcompptocount > 0 ? ($indcompptocount/$indcompcount) * 100 : 0;
+            $indcompptopct = number_format((float)$indcompptopct, 1, '.', '') . "%";
+          $wagesarray = array(array("Mean four-week wage*",$workcount,$indcompmeanwage,$grpintegmeanwage,$selfempmeanwage . "*"),array("Percent earning paid time off",$indcompcount,$indcompptopct," -- ","--")
+        );
+
+        $hoursarray = array(array("Mean hours per person participating in activity in four-week period*",$workcount,$indcompmeanhrs,$grpintegmeanhrs,$selfempmeanhrs . "*"),array("Percent of total hours in activity for four-week period",$workcount,$indcomphrspct,$grpinteghrspct,$selfemphrspct));
+          $arraycount = array(array("Number participating in activity",$ttlcount,$indcompcount,$grpintegcount,$selfempcount,$jobsearchcount,$wraparoundcount),
+          array("Percent participating in activity",$ttlcount,$indcomppct,$grpintegpct,$selfemppct,$jobsearchpct,$wraparoundpct));
+ $sixarray = array_slice($headerarray, 0, 8);
+ $fivearray = array_slice($headerarray,0,5);
+ $data = array(
+      '#type' => 'markup',
+      '#prefix' => "<div class=\"clearfix\"><a class=\"viewButton btn\" href=\"/\">Back to main page</a><a class=\"viewButton btn addInd\" href=\"/provider/$provid/individuals\" data-toggle=\"tooltip\" title=\"\" data-original-title=\"View a list of your individuals\">View list of individuals</a><a class=\"btn btn-danger\" href=\"/user/logout\">Log out</a></div>
+      <h3>Data for $providername for the four week period $reportingperiod</h3>",
+      '#markup' =>  surveynodeform_table($captions[0],$arraycount,$headerarray) . surveynodeform_table($captions[1],$hoursarray,$fivearray). surveynodeform_table($captions[2],$wagesarray,$fivearray),
+      '#suffix' => '<p style="padding-bottom: 20px">* Self-employment earinings and hours are calculated for last three months.</p>',
+  );
+  return $data;
+
+
+}
+
+
+function surveynodeform_table($caption = NULL,$rows,$header) {
+  $tablecontent = "<table class=\"summTable\">";
+  $tablecontent .= $caption ? "<caption>$caption</caption>" : "";
+  $tablecontent .= "<tr>";
+foreach($header as $headcell) {
+$tablecontent .= "<th>$headcell</th>";
+}
+
+$tablecontent .= "</tr>";
+$rowno = 0;
+foreach($rows as $row) {
+  $cellno = 0;
+  $tablecontent .="<tr class=\"row$rowno\">";
+  foreach($row as $cell) {
+
+
+     $tablecontent .= "<td class=\"cell$cellno\">$cell</td>";
+     $cellno ++;
+   }
+ $tablecontent .= "</tr>";
+ $rowno++;
+}
+$tablecontent .= "</table>";
+
+
+/*
+$header = $header;
+$data = array(
+          $rows,
+);
+$output = theme('table',
+         array(
+           'header' => $header,
+                'rows' => $data )); */
+return $tablecontent;
+}
+
+function surveynodeform_preprocess_node(&$vars){
+  global $nid;
+    if (arg(0) == 'node' && is_numeric(arg(1)))   $nid = arg(1);
+    
+
+
+}
+
+
+
+/*function surveynodeform_og_delete_form_alter(&$form, &$form_state, $form_id) {
+
+
+
+  if ($form_id == 'og-ui-delete-membership' ) {
+
+      $form['actions']['submit']['#submit'][] = 'surveynodeform_og_delete_form_redirect';
+    } else {
+      return;
+    }
+} */
+
+function surveynodeform_og_delete_form_redirect($form, &$form_state) {
+  if (arg(1) == 'node' && is_numeric(arg(2)))   {
+   
+    $provid = arg(2);
+    $ogid = arg(6);
+    $indnodeid = surveynodeform_get_og_membership_entity_id($ogid);
+    $url = drupal_get_query_parameters();
+    $reportingperiod_id = arg(8);
+
+    $indnode = node_load($indnodeid);
+  
+   if($indnode->field_cie_individual && $indnode->field_cie_individual[LANGUAGE_NONE][0]['value'] == '1') {
+      $destination = "provider/$provid/individuals-cie/$reportingperiod_id";
+    } else
+    {
+      $destination = "provider/$provid/individuals/$reportingperiod_id";
+    }
+    $form_state['redirect'] = $destination;
+  }
+
+}
+
+function surveynodeform_individual_data_ga_node_form_submit($form, &$form_state) {
+ 
+  
+  $individual_id = $form_state['values']['field_individual']['und'][0]['target_id'] ;
+ 
+  if($individual_id) {
+    $individual_node = node_load($individual_id);
+    $node_wrapper = entity_metadata_wrapper('node', $individual_node);
+    
+  
+ 
+ 
+  
+  
+    $now = new DateTime( );
+        
+    $thismonth = $now->format("Y-m-d");
+    $nextmonth = new DateTime("$thismonth + 1 month");
+    
+    $nextmonthdate = $nextmonth->format('Y-m-01 00:00:00');
+    
+    $insertdate = strtotime($nextmonthdate);
+    
+    if($form_state['values']['field_indv_final_month']['und'][0]['value'] == 'Yes') {
+
+      
+    
+        $node_wrapper->revision->set(1);
+        $node_wrapper->field_date_of_entry_into_ende->set($insertdate);
+        $node_wrapper->save();
+    
+      
+      
+    }
+    else {
+      
+     
+      $extended = $individual_node->field_date_of_entry_into_ende[LANGUAGE_NONE][0]['value'] ? $individual_node->field_date_of_entry_into_ende[LANGUAGE_NONE][0]['value']: null;
+      $node_wrapper->field_date_of_entry_into_ende->set(NULL);
+      $node_wrapper->save();
+      
+    }
+  } 
+
+}
+
+
+
+function surveynodeform_profile_form_submit($form, &$form_state)
+{
+  $form_state['redirect'] = 'home';
+}
+
+function surveynodeform_form_alter(&$form, &$form_state, $form_id) {
+  global $nid;
+  if (arg(0) == 'node' && is_numeric(arg(1)))  
+  { $nid = arg(1);
+    $datanode = node_load($nid);
+  }
+  $form['#attributes']['class'][] = 'clearfix';
+  $url = drupal_get_query_parameters();
+  $reportingperiod_id = $url && $url['rp'] ? $url['rp'] : $datanode->field_reporting_period[LANGUAGE_NONE][0]['target_id'];
+  
+  if($form_id == 'provider_node_form') {
+    global $theme;
+    $stateid = $datanode->og_group_provider_state_ref[LANGUAGE_NONE][0]['target_id'];
+   
+
+
+    if($theme == 'statedata_boot') {
+        $url = drupal_get_query_parameters();
+        drupal_add_css(drupal_get_path('module', 'surveynodeform') . '/css/provideredit.css');
+        $urlslug ="";
+        if($url['status'] && $url['status'] == 'final' && $stateid != '116038') {
+
+          $form['#prefix']= "<h3>Are you sure you are ready to submit your user data?</h3><p>You will no longer be able to edit individuals or data after you submit this form.  Please make sure the contact information below is correct, then select the submit button if you are ready. <a href=\"/provider/" . arg(1) . "/individuals/$reportingperiod_id\">Back to list of individuals</a></p>";
+        }
+        elseif( $url['status'] && $url['status'] == 'final' && $stateid = '116038')
+        { 
+          $form['#prefix']= "<h3>Are you sure you are ready to submit your non-CIE user data?</h3><p>You will no longer be able to edit non-CIE individuals or data after you submit this form.  Please make sure the contact information below is correct, then select the submit button if you are ready. <a href=\"/provider/" . arg(1) . "/individuals/$reportingperiod_id\">Back to list of non-CIE individuals</a></p>";
+        }
+        elseif ($url['status'] && $url['status'] == 'final-cie') {
+
+          $form['#prefix']= "<h3>Are you sure you are ready to submit your CIE user data?</h3><p>You will no longer be able to edit CIE individuals or data after you submit this form.  Please make sure the contact information below is correct, then select the submit button if you are ready. <a href=\"/provider/" . arg(1) . "/individuals-cie/$reportingperiod_id\">Back to list of CIE individuals</a></p>";
+
+        }
+   
+      if(($url['status'] && $url['status'] == 'final') || ($url['status'] && $url['status'] == 'final-cie')) {
+      $form['actions']['submit']['#value'] = 'Final submit';
+
+        $form['actions']['submit']['#submit'][] = 'surveynodeform_node_form_redirect';
+       }
+    }
+
+
+  }
+
+  if($form_id == 'user_profile_form')
+  {
+    $form['#submit'][] = 'surveynodeform_profile_form_submit';
+  }
+
+  if ($form_id == 'individual_data_node_form') {
+    $form['field_indv_comp_hrs'][LANGUAGE_NONE][0]['value']['#attributes']['class'][]= 'checkHours';
+    $form['field_indv_cont_hrs'][LANGUAGE_NONE][0]['value']['#attributes']['class'][]= 'checkHours';
+    $form['field_grp_integ_hrs'][LANGUAGE_NONE][0]['value']['#attributes']['class'][]= 'checkHours';
+    $form['field_shl_hrs'][LANGUAGE_NONE][0]['value']['#attributes']['class'][]= 'checkHours';
+    $form['field_indv_comp_gross_wages'][LANGUAGE_NONE][0]['value']['#attributes']['class'][]= 'checkWages';
+    $form['field_indv_cont_gross_wages'][LANGUAGE_NONE][0]['value']['#attributes']['class'][]= 'checkWages';
+    $form['field_grp_integ_gross_wages'][LANGUAGE_NONE][0]['value']['#attributes']['class'][]= 'checkWages';
+    $form['field_shl_gross_wages'][LANGUAGE_NONE][0]['value']['#attributes']['class'][]= 'checkWages';
+  } elseif($form_id == 'individual_data_ma_node_form') 
+  {
+  $form['field_indv_comp_hrs'][LANGUAGE_NONE][0]['value']['#attributes']['class'][]= 'checkHours';
+  $form['field_grp_integ_hrs'][LANGUAGE_NONE][0]['value']['#attributes']['class'][]= 'checkHours';
+  $form['field_indv_comp_gross_wages'][LANGUAGE_NONE][0]['value']['#attributes']['class'][]= 'checkWages';
+  $form['field_grp_integ_gross_wages'][LANGUAGE_NONE][0]['value']['#attributes']['class'][]= 'checkWages';
+ 
+    //new state: add checks
+  } elseif($form_id == 'individual_data_ga_node_form') {
+    global $user;
+    $extendedstart = false;
+
+    if (!in_array('administrator', $user->roles) && in_array('GA Admin', $user->roles)) {
+        $form['#attributes']['class'][] = 'gaAdminHide';
+    }
+    
+    
+    $individual_id = $datanode->field_individual[LANGUAGE_NONE][0]['target_id'];
+    $individual_node = node_load($individual_id);
+
+    $reportingperiod_id = $datanode->field_reporting_period[LANGUAGE_NONE][0]['target_id'];
+    $reporting_period_node = node_load($reportingperiod_id);
+    $cieperiod = $reporting_period_node->field_georgia_cie[LANGUAGE_NONE][0]['value'] == 1 ? true : false;
+    $cie_individual = $individual_node->field_cie_individual[LANGUAGE_NONE][0]['value'] == 1 ? true : false;
+    if($cie_individual) {
+      $extended = $individual_node->field_date_of_entry_into_ende[LANGUAGE_NONE][0]['value'] ? $individual_node->field_date_of_entry_into_ende[LANGUAGE_NONE][0]['value']: null;
+     // $testing = $individual_node->field_date_of_entry_into_ende[LANGUAGE_NONE][0];
+      //print_r($testing);
+      //dpm($extended);
+     
+      
+      
+      if($extended) $extendedvalue = new DateTime( $extended  );
+      
+      $now = new DateTime(  );
+      $nowshow = $now->format('Y-m-d H:i:s');
+      //echo "<br />Now: $nowshow";
+      if($extended && $extendedvalue <= $now) {
+      
+       $form['#attributes']['class'][] = 'showExtended';
+      } else {
+        $form['#attributes']['class'][] = 'showInitial';
+        
+        
+      }
+      if(!$extended || $extendedvalue >= $now) {
+        
+        $form['#submit'][] = 'surveynodeform_individual_data_ga_node_form_submit';
+      }
+
+ 
+    }
+
+    if($cie_individual && !$cieperiod) {
+      $form['#attributes']['class'][] = 'nonCiePeriod';
+
+      unset($form['#groups']['group_indv_comp']);
+      unset($form['#fieldgroups']['group_indv_comp']);
+    } elseif ($cie_individual && $cieperiod) {
+      unset($form['#groups']['group_indv_comp']);
+      unset($form['#fieldgroups']['group_indv_comp']);
+
+      unset($form['#groups']['group_grp_integ']);
+      unset($form['#fieldgroups']['group_grp_integ']);
+
+      unset($form['#groups']['group_self_emp']);
+      unset($form['#fieldgroups']['group_self_emp']);
+
+      unset($form['#groups']['group_shl']);
+      unset($form['#fieldgroups']['group_shl']);
+
+      unset($form['#groups']['group_com_non_work']);
+      unset($form['#fieldgroups']['group_com_non_work']);
+
+      unset($form['#groups']['group_fac_non_work']);
+      unset($form['#fieldgroups']['group_fac_non_work']);
+    } elseif
+    ($cie_individual && $cieperiod) {
+      $form['#attributes']['class'][] = 'ciePeriod';
+    }
+     else 
+    {
+      unset($form['#groups']['group_cie']);
+      unset($form['#fieldgroups']['group_cie']);
+    }
+    $form['field_indv_comp_hrs'][LANGUAGE_NONE][0]['value']['#attributes']['class'][]= 'checkHours';
+    $form['field_grp_integ_hrs'][LANGUAGE_NONE][0]['value']['#attributes']['class'][]= 'checkHours';
+    $form['field_shl_hrs'][LANGUAGE_NONE][0]['value']['#attributes']['class'][]= 'checkHours';
+    $form['field_indv_comp_gross_wages'][LANGUAGE_NONE][0]['value']['#attributes']['class'][]= 'checkWages';
+    $form['field_grp_integ_gross_wages'][LANGUAGE_NONE][0]['value']['#attributes']['class'][]= 'checkWages';
+    $form['field_shl_gross_wages'][LANGUAGE_NONE][0]['value']['#attributes']['class'][]= 'checkWages';
+
+  }
+  if ($form_id == 'og_ui_delete_membership' ) {
+    $urlslug = "";
+    $url = drupal_get_query_parameters();
+    $reportingperiod_id = $url['rp'] ? $url['rp'] : arg(8);
+    if (arg(1) == 'node' && is_numeric(arg(2)))   $provid = arg(2);
+    $ogid = arg(6);
+    $indnodeid = surveynodeform_get_og_membership_entity_id($ogid);
+    $indnode = node_load($indnodeid);
+    if($indnode->field_cie_individual && $indnode->field_cie_individual[LANGUAGE_NONE][0]['value'] == '1') $urlslug .= "-cie";
+    $form['actions']['cancel'] = array(
+      '#type'   => 'markup',
+      '#markup' => '<div class="form-cancel-button-wrapper">' . l(t("Cancel"), "/provider/$provid/individuals/$reportingperiod_id$urlslug", array('attributes' => array('class' => array('form-cancel-button')))) . '</div>',
+    );
+    $form['#submit'][] = 'surveynodeform_og_delete_form_redirect';
+  
+    }
+    //new site: for georgia: hide Individual is in CIE category	field_cie_individual from non-georgia users in Individual node form
+    if ($form_id == 'individual_node_form')
+    {
+      global $user;
+
+      //if (!in_array('administrator', $user->roles) && !in_array('Survey administrator', $user->roles) && !in_array('GA Admin', $user->roles)) {
+      //  $form['field_cie_individual']['#access'] = FALSE;
+        //$form['field_date_of_entry_into_ende']['#access'] = FALSE;
+     // }
+    }
+  //new state: add node form id
+  if ($form_id == 'individual_data_node_form' || $form_id == 'individual_data_ma_node_form' || $form_id == 'individual_data_ga_node_form' || $form_id == 'individual_node_form') 
+  {
+    $form['field_indv_data_partic_why']['und']['#title'] = t('You have checked all the "did not participate" boxes on this form. Why didn\'t this individual participate in an activity? <br />(<span class="redUl">If this individual has been discharged or is deceased, please delete this individual from your list.</span>)');
+   $url = drupal_get_query_parameters();
+   $urlp = print_r($url,true);
+   watchdog('get urlp','URL p: ' . $urlp);
+ 
+    if ($form_id == 'individual_node_form' && isset($url['p'])) { 
+      $provid = $url['p'];
+      $statearray = surveynodeform_provider_statename($url['p']);
+      $statename = $statearray[0];
+      $statetid = key(taxonomy_get_term_by_name($statename));
+      drupal_add_css(drupal_get_path('module', 'surveynodeform') . "/css/$statename.css");
+      drupal_add_js(drupal_get_path('module', 'surveynodeform') . "/js/$statename.js");
+
+    } elseif ($form_id == 'individual_node_form' &&  !isset($url['p'])) 
+    {  
+      if($url['destination']) {
+        $destarray = explode('/', $url['destination']);
+        $provid = $destarray[1];
+        $reportingperiod_id = $destarray[3];
+        watchdog('reporting period id: ', 'reporting id: ' . $reportingperiod_id);
+      } else
+      {
+        $provid =  surveynodeform_get_prov_id($nid,'individual');
+      }
+      watchdog('provider id ', 'provider id: ' . $provid);
+      $statearray = surveynodeform_provider_statename($provid);
+      $statename = $statearray[0];
+      $statetid = key(taxonomy_get_term_by_name($statename));
+      watchdog('state name and state id: ', $statename . " " .  $statetid);
+      drupal_add_css(drupal_get_path('module', 'surveynodeform') . "/css/$statename.css");
+      drupal_add_js(drupal_get_path('module', 'surveynodeform') . "/js/$statename.js");
+    }
+    else
+    {  // set form_id
+    // new state: set form id to choose stylesheet and js
+      switch ($form_id) {
+        case 'individual_data_node_form':
+          $provtext = 'individual_data';
+        break;
+        case 'individual_data_ma_node_form':
+        $provtext = 'individual_data_ma';
+        break;
+        case 'individual_data_ga_node_form':
+          $provtext = 'individual_data_ga';
+        break;
+      }
+      $provid =  surveynodeform_get_prov_id($nid,$provtext);
+
+
+      $statearray = surveynodeform_provider_statename($provid);
+      $statename = $statearray[0];
+      $statetid = key(taxonomy_get_term_by_name($statename));
+     // if($datanode->field_cie_individual_yes_no && $datanode->field_cie_individual_yes_no[LANGUAGE_NONE][0]['value'] == '1') $statename = 'GeorgiaCIE';
+    
+        drupal_add_css(drupal_get_path('module', 'surveynodeform') . "/css/$statename.css");
+        drupal_add_js(drupal_get_path('module', 'surveynodeform') . "/js/$statename.js");
+    
+
+    }
+    parse_str(parse_url($_SERVER['HTTP_REFERER'], PHP_URL_QUERY), $queries);
+    $urlappend = '';
+    $urlappend = isset($queries['items_per_page']) ? '?items_per_page=' . $queries['items_per_page'] : '';
+    $urlappend .= isset($queries['page']) ? ( $queries['items_per_page'] ? '&page=' . $queries['page'] : '?page=' . $queries['page']) : '';
+    $urlappend .= isset($queries['order']) ? '&order=' . $queries['order'] : '';
+    $urlappend .= isset($queries['sort']) ? '&sort=' . $queries['sort'] : '';
+    $url = drupal_get_query_parameters();
+    if($url['rp']) $reportingperiod_id = $url['rp'];
+    if($datanode && $datanode->field_cie_individual_yes_no && $datanode->field_cie_individual_yes_no[LANGUAGE_NONE][0]['value'] == '1') 
+    {
+      $form['#prefix']= "<h4>&lt;&lt; <a class=\"backLink\" href=\"/provider/$provid/individuals-cie/$reportingperiod_id$urlappend\">Back to list of CIE individuals</a> &lt;&lt;</h4><h4><a href=\"#edit-submit\">Be sure to save before leaving this page <img src=\"/sites/all/modules/custom/surveynodeform/img/down-arrow.png\" alt=\"down arrow\" width=\"25\" height=\"25\" /></a></h4>";
+
+    }
+    else
+    {
+      $form['#prefix']= "<h4>&lt;&lt; <a class=\"backLink\" href=\"/provider/$provid/individuals/$reportingperiod_id$urlappend\">Back to list of individuals</a> &lt;&lt;</h4><h4><a href=\"#edit-submit\">Be sure to save before leaving this page <img src=\"/sites/all/modules/custom/surveynodeform/img/down-arrow.png\" alt=\"down arrow\" width=\"25\" height=\"25\" /></a></h4>";
+    }
+    $queries = array();
+    parse_str(parse_url($_SERVER['HTTP_REFERER'], PHP_URL_QUERY), $queries);
+    // print_r($queries);
+
+    $url = drupal_get_query_parameters();
+
+    if ($url && $url['destination']) {
+      $destination = $url['destination'];
+      $form['#action'] = "?destination=$destination$urlappend";
+
+    }
+    elseif($url['delete'] && $url['provnum']) 
+    {
+      $form['actions']['submit']['#submit'][] = 'surveynodeform_node_form_redirect';
+    }
+    else
+    {
+
+      if($form['nid']['#value']) {
+        // Form stays in edit mode on submit
+              
+          $form['#action'] = '?destination=node/' . $form['nid']['#value'] . '/edit';
+      } elseif (!$form['nid']['#value'] && $form_id == 'individual_node_form') 
+      {
+          $form['actions']['submit']['#submit'][] = 'surveynodeform_node_form_redirect';
+
+      }
+
+    }
+
+      //new site: add settings
+      // MA variables
+      $settings['mamin'] = variable_get('surveynodeform_maminwage');
+      $settings['mahrlow'] = variable_get('surveynodeform_mahrlow');
+      $settings['mahrhigh'] = variable_get('surveynodeform_mahrhigh');
+      $settings['mawagelow'] = variable_get('surveynodeform_mawagelow');
+      $settings['mawagehigh'] = variable_get('surveynodeform_mawagehigh');
+      $settings['maselfearnhigh'] = variable_get('surveynodeform_maselfearnhigh');
+      $settings['maselfexpensehigh'] = variable_get('surveynodeform_maselfexpensehigh');
+      //MD variables
+      $settings['mdmin'] = variable_get('surveynodeform_mdminwage');
+      $settings['mdhrlow'] = variable_get('surveynodeform_mdhrlow');
+      $settings['mdhrhigh'] = variable_get('surveynodeform_mdhrhigh');
+      $settings['mdwagelow'] = variable_get('surveynodeform_mdwagelow');
+      $settings['mdwagehigh'] = variable_get('surveynodeform_mdwagehigh');
+      $settings['mdselfearnhigh'] = variable_get('surveynodeform_mdselfearnhigh');
+      $settings['mdselfexpensehigh'] = variable_get('surveynodeform_mdselfexpensehigh');
+      //GA variables
+      // New state: add settings
+      $settings['gamin'] = variable_get('surveynodeform_gaminwage');
+      $settings['gahrlow'] = variable_get('surveynodeform_gahrlow');
+      $settings['gahrhigh'] = variable_get('surveynodeform_gahrhigh');
+      $settings['gawagelow'] = variable_get('surveynodeform_gawagelow');
+      $settings['gawagehigh'] = variable_get('surveynodeform_gawagehigh');
+      $settings['gaselfearnhigh'] = variable_get('surveynodeform_gaselfearnhigh');
+      $settings['gaselfexpensehigh'] = variable_get('surveynodeform_gaselfexpensehigh');
+
+    //new state: add form id
+    if(($form_id == 'individual_data_node_form' || $form_id == 'individual_data_ma_node_form' || $form_id == 'individual_data_ga_node_form') && !isset($url['delete']) && !isset($url['provnum']) ) {  drupal_add_css(drupal_get_path('module', 'surveynodeform') . '/css/surveyform.css'); }
+    if(($form_id == 'individual_data_node_form' || $form_id == 'individual_data_ma_node_form' || $form_id == 'individual_data_ga_node_form')  && isset($url['delete']) && isset($url['provnum'])) { drupal_add_css(drupal_get_path('module', 'surveynodeform') . '/css/deletereason.css');
+    $form['#prefix']= "<h3>Explain your reason for deleting this individual in the form below and hit \"Next step,\" then finish deleting on the next page.</h3>";
+    $form['actions']['submit']['#value'] = 'Next step';
+    $form['actions']['submit']['#attributes'] = array('class' => array('btn','btn-primary'));
+  }
+
+    if (!path_is_admin(current_path())) {
+      //  drupal_add_js(array('surveynodeform' => array('mdmin' => $mdminimum)), array('type' => 'setting'));
+
+      //drupal_add_js(array('surveynodeform' => array('mdmin' => $settings)), 'setting');
+      drupal_add_js(drupal_get_path('theme', 'bootstrap') . '/js/misc/_vertical-tabs.js'); 
+    }
+    //new state: add form id
+    if(($form_id == 'individual_data_node_form' || $form_id == 'individual_data_ma_node_form'|| $form_id == 'individual_data_ga_node_form') && !isset($url['delete']) && !isset($url['provnum'])) { drupal_add_js(drupal_get_path('module', 'surveynodeform') . '/js/surveyform.js'); }
+
+    if($form_id == 'individual_node_form') { drupal_add_js(drupal_get_path('module', 'surveynodeform') . '/js/individualform.js'); }
+        drupal_add_js(array('Surveyconfig' => $settings), 'setting');
+      $field_name = 'field_YOURFIELD';
+
+
+    if (empty($form[$field_name])) {
+      return;
+      
+    }
+
+  $field_language = $form[$field_name][LANGUAGE_NONE];
+  $max_delta = $form[$field_name][$field_language]['#max_delta'];
+  unset($form[$field_name][$field_language][$max_delta]);
+  }
+
+    //stop any node deletions of state nodes
+    //this prevents deletion of Maryland, Mass., and Georgia state nodes.  A bit hacky.  Todo: run a node type test so future states won't get deleted
+  if (($form['#id'] == 'views-form-admin-views-node-system-1' && (in_array('116038',$_POST['views_bulk_operations']) || in_array('7',$_POST['views_bulk_operations']) ||in_array('10',$_POST['views_bulk_operations']) ) )|| ($form['#id'] == 'node-delete-confirm' && arg(0) == 'node' && is_numeric(arg(1))  && (arg(1) == 116038 ||arg(1) == 7 ||arg(1) == 10 ) )) 
+  {
+    //set a message...
+    drupal_set_message('Warning: don\'t delete states');
+    //stop people from being able to submit the delete form (and in turn stop the delete)
+    unset($form['actions']['submit']);
+    //set the "cancel" link text to something else
+    $form['actions']['cancel']['#title'] = t('Don\'t delete states!!! <<< Go back <<<');
+  }
+}
+
+// Massachusetts settings
+function surveynodeform_admin() {
+  $form = array();
+  $form['surveynodeform_maminwage'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Massachusetts minimum wage'),
+    '#default_value' => variable_get('surveynodeform_maminwage', 11.00),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Minimum wage in Massachusetts."),
+    '#required' => TRUE,
+  );
+  $form['surveynodeform_mahrlow'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Massachusetts hour range, low point'),
+    '#default_value' => variable_get('surveynodeform_mahrlow', 1),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Massachusetts hour range, low point."),
+    '#required' => TRUE,
+  );
+
+  $form['surveynodeform_mahrhigh'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Massachusetts hour range, high point'),
+    '#default_value' => variable_get('surveynodeform_mahrhigh', 80),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Massachusetts hour range, high point."),
+    '#required' => TRUE,
+  );
+
+  $form['surveynodeform_mawagelow'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Massachusetts wage range, low point'),
+    '#default_value' => variable_get('surveynodeform_mawagelow', 1),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Massachusetts wage range, low point."),
+    '#required' => TRUE,
+  );
+
+  $form['surveynodeform_mawagehigh'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Massachusetts wage range, high point'),
+    '#default_value' => variable_get('surveynodeform_mawagehigh', 1000),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Massachusetts wage range, high point."),
+    '#required' => TRUE,
+  );
+
+
+
+  $form['surveynodeform_maselfearnhigh'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Massachusetts self-employment income, high point'),
+    '#default_value' => variable_get('surveynodeform_maselfearnhigh', 1000),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Massachusetts self-employment income, high point."),
+    '#required' => TRUE,
+  );
+
+
+  $form['surveynodeform_maselfexpensehigh'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Massachusetts self-employment expenses, high point'),
+    '#default_value' => variable_get('surveynodeform_maselfexpensehigh', 1000),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Massachusetts self-employment expenses, high point."),
+    '#required' => TRUE,
+  );
+  // Maryland settings
+  $form['surveynodeform_mdminwage'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Maryland minimum wage'),
+    '#default_value' => variable_get('surveynodeform_mdminwage', 8.25),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Minimum wage in Maryland."),
+    '#required' => TRUE,
+  );
+  $form['surveynodeform_mdhrlow'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Maryland hour range, low point'),
+    '#default_value' => variable_get('surveynodeform_mdhrlow', 1),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Maryland hour range, low point."),
+    '#required' => TRUE,
+  );
+
+  $form['surveynodeform_mdhrhigh'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Maryland hour range, high point'),
+    '#default_value' => variable_get('surveynodeform_mdhrhigh', 80),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Maryland hour range, high point."),
+    '#required' => TRUE,
+  );
+
+  $form['surveynodeform_mdwagelow'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Maryland wage range, low point'),
+    '#default_value' => variable_get('surveynodeform_mdwagelow', 1),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Maryland wage range, low point."),
+    '#required' => TRUE,
+  );
+
+  $form['surveynodeform_mdwagehigh'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Maryland wage range, high point'),
+    '#default_value' => variable_get('surveynodeform_mdwagehigh', 1000),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Maryland wage range, high point."),
+    '#required' => TRUE,
+  );
+
+
+
+  $form['surveynodeform_mdselfearnhigh'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Maryland self-employment income, high point'),
+    '#default_value' => variable_get('surveynodeform_mdselfearnhigh', 1000),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Maryland self-employment income, high point."),
+    '#required' => TRUE,
+  );
+
+
+  $form['surveynodeform_mdselfexpensehigh'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Maryland self-employment expenses, high point'),
+    '#default_value' => variable_get('surveynodeform_mdselfexpensehigh', 1000),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Maryland self-employment expenses, high point."),
+    '#required' => TRUE,
+  );
+  //New state: add settings
+  //Georgia settings
+
+  $form['surveynodeform_gaminwage'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Georgia minimum wage'),
+    '#default_value' => variable_get('surveynodeform_gaminwage', 8.25),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Minimum wage in Georgia."),
+    '#required' => TRUE,
+  );
+  $form['surveynodeform_gahrlow'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Georgia hour range, low point'),
+    '#default_value' => variable_get('surveynodeform_gahrlow', 1),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Georgia hour range, low point."),
+    '#required' => TRUE,
+  );
+
+  $form['surveynodeform_gahrhigh'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Georgia hour range, high point'),
+    '#default_value' => variable_get('surveynodeform_gahrhigh', 80),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Georgia hour range, high point."),
+    '#required' => TRUE,
+  );
+
+  $form['surveynodeform_gawagelow'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Georgia wage range, low point'),
+    '#default_value' => variable_get('surveynodeform_gawagelow', 1),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Georgia wage range, low point."),
+    '#required' => TRUE,
+  );
+
+  $form['surveynodeform_gawagehigh'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Georgia wage range, high point'),
+    '#default_value' => variable_get('surveynodeform_gawagehigh', 1000),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Georgia wage range, high point."),
+    '#required' => TRUE,
+  );
+
+
+
+  $form['surveynodeform_gaselfearnhigh'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Georgia self-employment income, high point'),
+    '#default_value' => variable_get('surveynodeform_gaselfearnhigh', 1000),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Georgia self-employment income, high point."),
+    '#required' => TRUE,
+  );
+
+
+  $form['surveynodeform_gaselfexpensehigh'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Georgia self-employment expenses, high point'),
+    '#default_value' => variable_get('surveynodeform_gaselfexpensehigh', 1000),
+    '#size' => 5,
+    '#maxlength' => 6,
+    '#description' => t("Georgia self-employment expenses, high point."),
+    '#required' => TRUE,
+  );
+
+  return system_settings_form($form);
+}
+function surveynodeform_get_og_membership_entity_id($ogid) {
+  $result = db_query("SELECT og.etid
+    FROM {og_membership} og
+    WHERE og.id=:ogid
+    AND og.entity_type= :entity_type",
+    array(
+      ':ogid' => $ogid,
+      ':entity_type' => 'node',
+    )
+  );
+  $entity_exists = $result->rowCount();
+  if ($entity_exists) {
+    foreach ($result as $record) {
+      return $record->etid;
+    }
+  }
+  return FALSE;
+}
+
+
+
+
+function surveynodeform_node_form_redirect($form, &$form_state) {
+  $destination = "";
+    $url = drupal_get_query_parameters();
+    
+  $reportingperiod_id = $url['rp']  ? $url['rp'] : ($form_state['values']['field_reporting_period'] ?	$form_state['values']['field_reporting_period']['und'][0]['target_id'] : null);
+  if ($url['p']) {
+    
+    if(($form_state['values']['field_cie_individual'] && $form_state['values']['field_cie_individual']['und'][0]['value'] == '1') || ($form_state['values']['field_cie_individual_yes_no'] && $form_state['values']['field_cie_individual_yes_no']['und'][0]['value'] == '1')) 
+    { $destination = "provider/" . $url['p'] . "/individuals-cie/$reportingperiod_id";
+    } else
+    {
+      $destination = "provider/" . $url['p'] . "/individuals/$reportingperiod_id";
+    }
+
+  } elseif($url['delete'] && $url['provnum']) {
+    $memberno = $url['delete'];
+    $provno = $url['provnum'];
+    $reporting_period_id = $url['rp'];
+    $destination = "group/node/$provno/admin/people/delete-membership/$memberno/rp/$reportingperiod_id";
+
+  }
+
+  elseif($url['status'] == 'final') {
+
+    $destination = "sdata_rp/submit_data/" . arg(1);
+
+  }
+
+
+  elseif($url['status'] == 'final-cie') {
+
+    $destination = "sdata_rp/submit_data_cie/" . arg(1);
+
+  }
+  $form_state['redirect'] = $destination;
+}
+
+function surveynodeform_theme_registry_alter(&$theme_registry) {
+	$theme_registry['print__node__surveyform']['template'] = 'print--node--idd-survey';
+	$theme_registry['print__node__surveyform']['path'] = drupal_get_path('module', 'surveynodeform') .'/themes';
+}
+
+
+ function surveynodeform_theme($existing, $type, $theme, $path){
+
+	return array(
+		'surveynodeform_form' => array(
+			'arguments' => array('form' => null),
+			'path' => drupal_get_path('module', 'surveynodeform').'/themes/',
+			'template' => 'survey-node-form', //name of your template file, it can be anything
+			'render element' => 'form'
+		)
+	);
+}
+
+/* function surveynodeform_preprocess_content_field(&$vars) {
+  if ($vars['field']['field_name'] == "field_inventory_price") {
+    $vars['label'] = "Test Price";
+  }
+} */

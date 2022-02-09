@@ -1,0 +1,5 @@
+name = sdata - Individual data
+description = "Provides custom individual data collection functionality for the sdata site."
+package = sdata
+core = 7.x
+dependencies[] = sdata_rp

@@ -1,0 +1,19 @@
+.node-type-individual-data-ga .vertical-tabs-panes fieldset.active.group-indv-comp {min-height: 1050px;}
+.main-container #edit-actions {width: 220px; position: relative;  }
+#individual-node-form #edit-field-cie-individual-und-none,
+#individual-node-form label[for="edit-field-cie-individual-und-none"] { display: none; }
+ #individual-data-ga-node-form #edit-actions {position: absolute; margin-top: -340px;} 
+#individual-data-ga-node-form #edit-actions.adjustDown {margin-top: 10px;}
+.page-node-edit.node-type-individual .tabs--primary.nav.nav-tabs { display: none;}
+.vertical-tabs-panes fieldset.active { min-height: 900px;}
+#individual-data-ga-node-form {min-height: 2000px;} 
+#individual-data-ga-node-form div#reasonnopartic { display: none; }
+#individual-data-ga-node-form div#reasonnopartic.activated { display: block; position: absolute; top: 600px; }
+fieldset.showQues .form-type-textarea.form-item-field-indv-comp-why-not-min-und-0-value {display: none; }
+.indCalcHourly { margin-top: 18px;}
+form.gaAdminHide div.form-item-title, form.gaAdminHide div#edit-field-individual, form.gaAdminHide div#edit-og-group-ref {display: none;}
+#edit-group_cie #bootstrap-panel {display: none;}
+#edit-group_cie #bootstrap-panel--2 {display: none;}
+.showInitial #edit-group_cie #bootstrap-panel {display: block;}
+.showExtended #edit-group_cie #bootstrap-panel--2 {display: block;}
+fieldset .form-type-textarea.form-item-field-grp-integ-other-source-und-0-value , fieldset .form-type-textarea.form-item-field-self-emp-other-source-und-0-value { display: block; }

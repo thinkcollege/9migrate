@@ -1,0 +1,95 @@
+div.form-item-field-surv-coord-contact-und-0-field-contact-survey-coordinator-und-0-country,div.form-item-field-contact-survey-coordinator-und-0-country, input[value="_none"], label[for*='none'] {display: none; }
+#idd_popup { display: none; max-width: 30em; background-color: #fff; }
+#idd_popup #popupText { margin:8px; }
+.tabs-left,.tabs-left .vertical-tabs-panes.vertical-tabs-processed.tab-content { min-height: 700px; }
+.activeTwo .redLine { background-image: url('../img/asterisk.png'); background-repeat: no-repeat; background-position: right 10px center; }
+.activeTwo input.redLine {border: 1px solid red; }
+.reqP, .reqNumwarn { margin-bottom: 0; padding-bottom: 0; color: red; }
+.jumbotron .reqP, .jumbotron .reqNumwarn { margin-bottom: 0; padding-bottom: 0; color: red; font-size: 1em; }
+.form-type-textfield input { max-width: 50%; }
+#addressfield-wrapper .form-type-textfield input { max-width: 100%; }
+.nav.vertical-tabs-list > li > a {font-weight: bold;}
+.nav.vertical-tabs-list > li > a.tabFilled { color: green; background-image: url('../img/green_check.png');  background-position: right 4px center; background-repeat: no-repeat; padding: 10px 22px 10px 10px;}
+.nav.vertical-tabs-list > li > a.inComplete { color: green; background-image: url('../img/incomplete.png');  background-position: right 4px center; background-repeat: no-repeat; padding: 10px 22px 10px 10px;}
+.nav.nav-tabs.vertical-tabs-list > li.vertical-tab-button > a {background-color: #c2d2de; }
+.nav.nav-tabs.vertical-tabs-list > li.vertical-tab-button.active > a {background-color: #fff; }
+
+.field-group-div h3 {font-size: 1em; font-weight: bold;}
+.group-emp-day-svc-amount .form-type-checkboxes > label, .group-integ-fund-amt .form-type-checkboxes > label, .group-integ-other-agc-subgroup .form-type-checkboxes > label,.group-fac-amt .form-type-checkboxes > label, .group_fac_non_w_fund_amt .form-type-checkboxes > label,.group-oth-emp-day-fund-amt .form-type-checkboxes > label,.group-comm-fund-amt .form-type-checkboxes > label, .group-fac-other-entities .form-type-checkboxes > label { display: none; }
+.group-emp-day-svc-amount .form-type-checkboxes .form-type-checkbox label, .group-integ-fund-amt .form-type-checkboxes .form-type-checkbox label, .group-integ-other-agc-subgroup .form-type-checkboxes .form-type-checkbox label,.group-fac-amt .form-type-checkboxes .form-type-checkbox label,.group_fac_non_w_fund_amt .form-type-checkboxes .form-type-checkbox label,.group-oth-emp-day-fund-amt .form-type-checkboxes .form-type-checkbox label,.group-comm-fund-amt .form-type-checkboxes .form-type-checkbox label, .group-fac-other-entities .form-type-checkboxes .form-type-checkbox label   { font-weight: bold; }
+.checkbox input[type="checkbox"]{position:absolute;margin-left:-20px;margin-top:0;}
+#idd-survey-node-form > div > h2 { display: none; }
+.vertical-tabs-panes fieldset.active {min-height: 700px;}
+fieldset#edit-field-surv-coord-contact-und-0-field-contact-survey-coordinator-und-0 legend { display: none; }
+fieldset#edit-field-surv-coord-contact-und-0-field-contact-survey-coordinator-und-0.panel-default { border: none; }
+fieldset#edit-field-surv-coord-contact-und-0-field-contact-survey-coordinator-und-0 .panel-body { padding-bottom: 0; }
+.vertical-tabs-pane .form-inline .form-group.filter-help { display: none;}
+.vertical-tabs-pane .help-block { color: #333; font-size: 1em; }
+.vertical-tabs-pane .help-block h2 { font-size: 1.3em; font-weight: bold; }
+.jumbotron p.fundingTotal { font-size: 1.1em; font-weight: bold;}
+.calcWarn  { display: block; font-size: 1.1em; color: #94132F;   margin-top: 4px;
+line-height: 1.2em; font-weight: bold}
+.jumbotron .calcWarn, #edit-field-save-and-return .calcWarn { display: block; font-size: 1.1em; color: #94132F;   margin-top: 16px;
+line-height: 1.2em; font-weight: bold}
+.whiteBlock {display: block; background-color: #fff; padding: 8px;
+  border-radius: 8px 8px 8px 8px;
+  -moz-border-radius: 8px 8px 8px 8px;
+  -webkit-border-radius: 8px 8px 8px 8px;
+  border: 1px solid #333; margin-bottom: 9px;}
+.main-container #edit-actions.form-actions.form-wrapper.form-group #edit-preview {display: none;}
+#currentYear { display: none;}
+.tabs--primary.nav.nav-tabs { display: none;}
+#saveWarn { color: red; font-weight: bold; }
+.tabledrag-toggle-weight-wrapper,.tabledrag-hide,#edit-field-contact-other-staff-und-1-weight { display: none;}
+.jumbotron .lastYearVal { font-size: .9em; width: 50%; background-color: #fff8df;}
+ .lastYearVal {width: 50%; background-color: #fff8df;}
+/* .page-node-add-idd-survey ul.nav.nav-tabs.vertical-tabs-list {position: fixed; }
+ .page-node-add-idd-survey .vertical-tabs-panes {margin-left: 228px; } */
+#field-if-a-specific-point-in-tim-add-more-wrapper fieldset.panel { margin-bottom: 0; }
+p.carefulWarn.warnBottom, p.warnBottom.carefulWarn:last-child,p.carefulWarn.warnTop, p.warnTop.carefulWarn:last-child {display: block;   border-radius: 8px 8px 8px 8px;
+  -moz-border-radius: 8px 8px 8px 8px;
+  -webkit-border-radius: 8px 8px 8px 8px;
+  border: 1px solid #333;
+background-color: red; font-weight: bold; padding: 12px;color: white }
+.carefulWarn a { color: white; text-decoration: underline;}
+.carefulWarn a { text-decoration: none; }
+.form-type-checkbox.form-item-field-save-and-return-und.form-item {padding-top: 25px; }
+a#logOutbut {display: block;   border-radius: 6px 6px 6px 6px;
+  -moz-border-radius: 6px 6px 6px 6px;
+  -webkit-border-radius: 6px 6px 6px 6px;
+  border: 1px solid #333;
+background-color: red; font-weight: bold; padding: 4px 0; margin-top: 12px; color: #fff; width: 74px; text-align: center;}
+p.warnTop { background-color: #fff8df; padding: 12px; width: 70%;}
+p.warnBottom,p.warnBottom:last-child {float: right; width: 75%; margin-bottom: 14px; padding: 12px;background-color: #FFF8DF;}
+.field-type-number-bigint input.form-control { display: inline; }
+a.printButton {background-color: #388dc1; display: block;   border-radius: 6px 6px 6px 6px;
+  -moz-border-radius: 6px 6px 6px 6px;
+  -webkit-border-radius: 6px 6px 6px 6px; color: #fff; width: 170px; padding: 5px; text-align: center; margin-bottom: 20px;}
+  a.openTab {font-weight: normal; color: #333; text-decoration: underline;}
+    a.openTab:hover { text-decoration: none; }
+    a.openTab.bolded {font-weight: bold; }
+.navbar-header h1 a.navbar-brand.name { color: #62943f; }
+#edit-field-which-of-the-checked-categ-und { max-width: 588px; }
+.subQuestion, .form-item-field-of-the-total-number-of-ind-und-0-value,#edit-field-which-of-the-checked-categ,.form-item-field-waitlist-num-und-0-value,#field-fac-total-num-of-ind-add-more-wrapper,#edit-field-fac-bas-num-indvs,#edit-field-oth-emp-day-num-indv { margin: 0 0 0 30px;}
+#edit-field-total-integ-y-n,#edit-field-which-of-the-following-sou,#edit-field-please-enter-the-total-num,#edit-field-dayemp-wait-list-y-n,#field-comments-totals-day-and-em-add-more-wrapper,#edit-field-integ-working-paid-commun,#edit-field-integ-other-agencies,#field-integ-total-expenditure-add-more-wrapper,#field-integ-comments-add-more-wrapper,#edit-field-integ-emp-svc-y-n,#field-total-served-add-more-wrapper,#edit-field-fac-y-n,#edit-field-fac-other-entity-y-n,#field-fac-total-expendit-add-more-wrapper,#field-fac-comments-add-more-wrapper,#edit-field-comm-does-state-offer,#field-comm-total-expenditure-add-more-wrapper,#field-comm-comments-add-more-wrapper,#edit-field-fac-bas-y-n,#field-fac-non-wk-tot-expend-add-more-wrapper,#field-comments-on-the-fy-2016-to-add-more-wrapper,#edit-field-oth-emp-day-y-n,#field-oth-emp-day-providers-add-more-wrapper,#edit-field-oth-emp-day-total-funds,#field-oth-comments-add-more-wrapper,#field-please-enter-the-total-num-add-more-wrapper {margin-top: 50px; }
+#edit-field-total-integ-y-n > div > label,#edit-field-which-of-the-following-sou > div > label,#edit-field-please-enter-the-total-num > div > label,#edit-field-dayemp-wait-list-y-n > div > label,#field-comments-totals-day-and-em-add-more-wrapper > div > label,#edit-field-integ-working-paid-commun > div > label,#edit-field-integ-other-agencies > div > label,#field-integ-total-expenditure-add-more-wrapper > div > label,#field-integ-comments-add-more-wrapper > div > label,#edit-field-integ-emp-svc-y-n > div > label,#field-total-served-add-more-wrapper > div > label,#edit-field-fac-y-n > div > label,#edit-field-fac-other-entity-y-n > div > label,#field-fac-total-expendit-add-more-wrapper > div > label,#field-fac-comments-add-more-wrapper > div > label,#edit-field-comm-does-state-offer > div > label,#field-comm-total-expenditure-add-more-wrapper > div > label,#field-comm-comments-add-more-wrapper > div > label,#edit-field-fac-bas-y-n > div > label,#field-fac-non-wk-tot-expend-add-more-wrapper > div > label,#field-comments-on-the-fy-2016-to-add-more-wrapper > div > label,#edit-field-oth-emp-day-y-n > div > label,#field-oth-emp-day-providers-add-more-wrapper > div > label,#edit-field-oth-emp-day-total-funds > div > label,#field-oth-comments-add-more-wrapper > div > label,#field-please-enter-the-total-num-add-more-wrapper > div > label { font-size: 1.2em; }
+
+.main-container h3, .main-container .h3 {font-size: 1.2em; }
+p.nextSec a {padding: 10px; font-weight: bold;}
+div#reasonnopartic { position: absolute; top: 400px; width: 72%; right: 28px; }
+div#reasonnopartic.activated {border: 1px solid red; padding: 18px 8px 8px; }
+#individual-data-node-form .deleteGroup, #individual-data-ma-node-form .deleteGroup,#individual-data-node-form .deleteGroup, #individual-data-ga-node-form .deleteGroup {display: none;}
+.backLink { margin-bottom: 14px; }
+.node-type-individual-data .vertical-tabs-panes.vertical-tabs-processed.tab-content {overflow: visible; }
+.node-type-individual-data fieldset { display: block;}
+fieldset #edit-field-indv-emp-less div, fieldset .form-type-textarea, fieldset #edit-field-indv-emp-less-other div, fieldset #edit-field-grp-sup-less, fieldset #edit-field-grp-sup-less div, #edit-field-grp-sup-less-other, #edit-field-grp-sup-less-other div { display: none;}
+.node-type-individual-data-ga fieldset .form-type-textarea.form-item-field-indv-comp-other-source-und-0-value {display: block;}
+fieldset.showQues #edit-field-indv-emp-less div,fieldset.showQues #edit-field-grp-sup-less, fieldset.showQues #edit-field-indv-emp-less-other div, fieldset.showQues #edit-field-grp-sup-less div, fieldset.showQues .form-type-textarea, #field-day-program-other-explain-add-more-wrapper .form-type-textarea, .showQues #edit-field-grp-sup-less-other, .showQues #edit-field-grp-sup-less-other div { display: block; }
+input[type="checkbox"].form-checkbox { margin-right: 10px; }
+label[for="edit-field-indv-data-partic-why-und-4"], #edit-field-indv-data-partic-why-und-4 {display:none;}
+label[for="edit-field-indv-emp-less-und-2"], #edit-field-indv-emp-less-und-2,label[for="edit-field-grp-sup-less-und-2"], #edit-field-grp-sup-less-und-2 {display:none;}
+.summTable { margin-bottom: 20px; }
+.summTable tr td.cell0 { width: 250px; text-align: left;}
+.summTable tr { border-bottom: 1px solid black; }
+.summTable tr td { padding: 12px 5px; text-align: center; }
+.summTable tr th { padding: 7px; text-align: center; }

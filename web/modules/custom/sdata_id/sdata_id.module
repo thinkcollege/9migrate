@@ -1,0 +1,173 @@
+<?php
+/*
+ * Implements hook_node_access().
+ *
+ * Authenticated users (providers) can only view and edit individual data nodes
+ * for the current reporting period that are published.
+ */
+function sdata_id_node_access($node, $op, $account) {
+
+  $type = is_string($node) ? $node : $node->type;
+
+
+  // Check to see if we're looking at an individual_data* node.
+  if (strpos($type, 'individual_data') !== FALSE) {
+    // Check to see if this $account has any roles other than authenticated user.
+    // If so, then we don't care
+
+
+  if (in_array('administrator', $account->roles)){
+      return NODE_ACCESS_IGNORE;
+    }
+
+    // Block access to non-admin users if the individual data node is unpublished.
+    if ($node && $node->status == 0) {
+      return NODE_ACCESS_DENY;
+
+    }
+
+    // Get the state that the $account belongs to.
+    $groups = og_get_groups_by_user($account, 'node');
+    if (count($groups)) {
+      // Assume users are only members of a single (provider) group, so assume the
+      // first is the right one.
+      $provider_node = node_load(reset($groups));
+      // Get the user's state from their provider. This assumes all providers have a state.
+      $state_node = node_load($provider_node->og_group_provider_state_ref[LANGUAGE_NONE][0]['target_id']);
+      // Confirm that the first group listed by the provider is a state group.
+      if ($state_node->type == 'state') {
+        // We only care if the current node is the individual data node content
+        // type for the user's provider's state (OG access takes care of the rest).
+        if ($type == $state_node->field_individual_data_type[LANGUAGE_NONE][0]['value']) {
+          // Block access to non-admin users if they're trying to edit an individual
+          // data node for anything other than the current reporting period.
+          if ($state_node->field_current_reporting_period[LANGUAGE_NONE][0]['target_id'] != $node->field_reporting_period[LANGUAGE_NONE][0]['target_id'] && $state_node->field_legacy_reporting_period[LANGUAGE_NONE][0]['target_id'] != $node->field_reporting_period[LANGUAGE_NONE][0]['target_id']) {
+            return NODE_ACCESS_DENY;
+          }
+        }
+      }
+    }
+  }
+
+  return NODE_ACCESS_IGNORE;
+}
+
+/*
+ * Implements hook_field_access().
+ *
+ * Authenticated users (providers) can only view and edit certain fields on
+ * individual data nodes.
+ */
+function sdata_id_field_access($op, $field, $entity_type, $entity, $account) {
+  // Perhaps we should be checking the $entity->type here, but for now, I think
+  //   we can do without, we're just restricting Providers from editing these fields
+  //   anywhere they appear (regardless of entity type).
+  global $user;
+
+  if ((in_array('MA user', $user->roles) || in_array('MD user', $user->roles) ||  in_array('GA user', $user->roles)) && !in_array('administrator', $user->roles)){
+    // If the user only has one role, they are a provider.
+    $no_access = array(
+      'field_individual',
+      'og_group_ref',
+      'field_reporting_period'
+    );
+
+    if (in_array($field['field_name'], $no_access) && ($op != 'view')) {
+      return FALSE;
+    }
+    return TRUE;
+  }
+}
+
+/*
+ * Implements hook_form_alter().
+ *
+ * Unfortunately, hook_field_access() doesn't want to have anything to do with
+ * the "title" field, so we have do handle access to it here. Lame.
+ */
+function sdata_id_form_alter(&$form, &$form_state, $form_id) {
+  // Perhaps we should be checking the $form_id here, but for now, I think
+  //   we can do without, we're just restricting Providers from editing the title
+  //   anywhere it appears (regardless of entity type).
+  global $user;
+
+if ((in_array('MA user', $user->roles) || in_array('MD user', $user->roles) || in_array('GA user', $user->roles)) && !in_array('administrator', $user->roles)){  // If the user only has one role, they are a provider.
+    unset($form['title']);
+  }
+
+  // Custom individual_data_ma stuff.
+  if ($form_id == 'individual_data_ma_node_form') {
+    $form['#attached']['js'] = array(
+      drupal_get_path('module', 'sdata_id') . '/js/ma.js',
+    );
+  }
+
+  // Custom individual_data (MD) stuff.
+  if ($form_id == 'individual_data_node_form') {
+    $form['#attached']['js'] = array(
+      drupal_get_path('module', 'sdata_id') . '/js/md.js',
+    );
+  }
+
+  // Custom individual_data (GA) stuff.
+  if ($form_id == 'individual_data_ga_node_form') {
+    $form['#attached']['js'] = array(
+      drupal_get_path('module', 'sdata_id') . '/js/ga.js',
+    );
+  }
+}
+
+/*
+ * Implements hook_node_insert().
+ *
+ * If a new individual node is created, also create a new individual data node
+ * for that user for the current reporting period.
+ */
+function sdata_id_node_insert($node) {
+  global $user;
+
+  /*
+   * 1. Add the provider if not already set.
+   * 2. Create a new individual data node for the current reporting period.
+   */
+  if ($node->type == 'individual') {
+    // If the provider is already set (by an admin), then bail.
+    if (isset($node->og_group_ref[LANGUAGE_NONE][0]['target_id'])) {
+      return;
+    }
+
+    // Get the provider from the querystring, if no provider, then bail.
+    $provider_nid = check_plain($_GET['p']);
+    $provider = node_load($provider_nid);
+
+    // Set provider.
+    $values = array(
+      'entity_type' => 'node',
+      'entity' => $node,
+      'field_name' => 'og_group_ref'
+    );
+    $result = og_group('node', $provider->nid, $values);
+
+    // Set the proper node access.
+    node_access_acquire_grants($node);
+
+    // Get the current reporting period and individual data content type from the
+    // state the provider belongs to.
+    $state_nid = $provider->og_group_provider_state_ref[LANGUAGE_NONE][0]['target_id'];
+    $state = node_load($state_nid);
+    $individual_data_content_type = $state->field_individual_data_type[LANGUAGE_NONE][0]['value'];
+    $current_reporting_period_nid = $state->field_current_reporting_period[LANGUAGE_NONE][0]['target_id'];
+    $reporting_period_node = node_load($current_reporting_period_nid);$toggle_period_nid = $reporting_period_nid;
+    $toggle_period_node = $reporting_period_node;
+    $legacy_period_nid = $state->field_legacy_reporting_period[LANGUAGE_NONE][0]['target_id'];
+    $legacyarray = array();
+    module_load_include('inc', 'sdata_rp', 'views/sdata_rp_handler_submit_completed_field');
+    if(isset($legacy_period_nid)) $legacyarray = _sdata_rp_switch_period($state_individual_data_content_type, $provider_nid, $legacy_period_nid);
+      if(isset($legacy_period_nid) && $legacyarray[0] && !$legacyarray[1] && !$legacyarray[2]) $toggle_period_node = node_load($legacy_period_nid);
+
+    _sdata_rp_create_new_individual_data_node($node, $individual_data_content_type, $toggle_period_node, $provider, false);
+
+
+  }
+
+}
