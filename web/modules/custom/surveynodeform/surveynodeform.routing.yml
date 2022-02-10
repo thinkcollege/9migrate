@@ -1,0 +1,15 @@
+surveynodeform.surveyconfigpage:
+  path: 'admin/settings/surveynodeform'
+  defaults:
+    _form:  '\Drupal\surveynodeform\Form\SurveynodeformConfigurationForm'
+    _title: 'Set state ranges'
+  requirements:
+    _permission: 'Survey node form permission'
+
+surveynodeform.providersummary:
+  path: 'prov/%/summary'
+  defaults:
+    _controller: '\Drupal\surveynodeform\Controller\SurveynodeformController::providersummary'
+    _title: 'Employment Supports Performance Outcome System Provider Report'
+  requirements:
+    _permission: 'Survey node form permission'

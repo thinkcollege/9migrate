@@ -1,0 +1,46 @@
+surveynodeform.library:
+  version: 1.x
+  css:
+    base:
+      css/surveyform.css: {}
+    theme:
+      css/print.css: {}
+      css/deletereason.css: {}
+      css/provideredit.css: {}
+  js:
+    js/surveyform.js: {}
+
+surveynodeform.Massachusetts.library:
+  version: 1.x
+  css:
+    base:
+      css/Massachusetts.css: {}
+  js:
+    js/Massachusetts.js: {}
+
+surveynodeform.Maryland.library:
+  version: 1.x
+  css:
+    base:
+      css/Maryland.css: {}
+  js:
+    js/Maryland.js: {}
+
+surveynodeform.Georgia.library:
+  version: 1.x
+  css:
+    base:
+      css/Georgia.css: {}
+  js:
+    js/Georgia.js: {}
+deletereason.library:
+  version: 1.x
+  css:
+    base:
+      css/deletereason.css: {}
+  js:
+    js/surveyform.js: {}
+individualform.library:
+  version: 1.x
+  js:
+    js/individualform.js: {}
