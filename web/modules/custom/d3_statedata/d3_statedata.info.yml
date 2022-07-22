@@ -1,0 +1,8 @@
+name: 'd3_statedata'
+type: module
+description: 'Statedata charts'
+core: 8.x
+core_version_requirement: ^8 || ^9
+package: 'Views'
+dependencies:
+  - drupal:views
