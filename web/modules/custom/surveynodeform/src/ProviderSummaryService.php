@@ -15,101 +15,40 @@ class ProviderSummaryService
     {
         $this->entityTypeManager = $entity_type_manager;
     }
-    public function load()
-    {
-
-        $storage = $this->entityTypeManager->getStorage('user');
-        $query = $storage->getQuery();
-        $userids = $query->execute();
-        $users = $storage->loadMultiple($userids);
-        $userarray = array();
-
-       foreach($userids as $user) {
-
-            $storage = \Drupal::entityTypeManager()->getStorage('profile')
-            ->loadByProperties([
-                'uid' => $user,
-                'type' => 'survey_participants',
-                'is_default' => 1,
-            ]);
-            $userobj = \Drupal\user\Entity\User::load($user);
-            $useremail = $userobj->getEmail();
-            $userstatus = $userobj ->get('status')->value;
-            $roles =$userobj->getRoles();
 
 
-                foreach($storage as $profile) {
-                    if ($userstatus != 0 && in_array('survey_participant',$roles)) {
-                        $firstname = $profile->get('field_survey_first_name')->value ? $profile->get('field_survey_first_name')->value : '';
-                        $lastname = $profile->get('field_survey_last_name')->value ? $profile->get('field_survey_last_name')->value : '';
-                        $timezone = $profile->get('field_participant_time_zone')->value ? $profile->get('field_participant_time_zone')->value : '';
-                        $cellphone = $profile->get('field_cell_phone')->value ? $profile->get('field_cell_phone')->value : '';
-                        $suspension = $profile->get('field_partic_suspension_dates')->value ? $profile->get('field_partic_suspension_dates')->value : '';
-                        $jobtype = $profile->get('field_job_type')->value ? $profile->get('field_job_type')->value : null;
-                        $suspension = $profile->get('field_partic_suspension_dates')->value ? $profile->get('field_partic_suspension_dates')->value : '';
-                        $suspension_end = $profile->get('field_partic_suspension_dates')->end_value ? $profile->get('field_partic_suspension_dates')->end_value : '';
-                        $activstatus = $profile->get('field_set_surveys_to_inactive')->value ? $profile->get('field_set_surveys_to_inactive')->value : '';
-                        $provider = $profile->get('field_provider')->target_id ? $profile->get('field_provider')->entity->getName() : 'unknown provider';
-                        $regcode = $profile->get('field_registration_code')->value ? $profile->get('field_registration_code')->value : '1000';
+    public function surveynodeform_get_state_id($state) {
+      $query = \Drupal::entityQuery('node');
+      $result = $query
+        ->condition('type', 'state')
+        ->condition('title', $state)
+        ->execute();
 
+        $nids = array();
+      if ($result) {
+          $nids = \Drupal\node\Entity\Node::loadMultiple($result);
 
-                        if($jobtype && $jobtype != 'Manager') $userarray[$user]= array($useremail,$firstname,$lastname,$cellphone,$timezone,$suspension,$suspension_end,$activstatus,$provider,$regcode);
-                    }
-                }
-       }
-       //print_r($userarray);
-        return $userarray;
-    }
-    public function handleSuspendDates($userphone,$startdate = null,$enddate = null) {
-        $today = new DateTime();
-        $today = $today->format('Y-m-d');
-
-        $storage = \Drupal::entityTypeManager()->getStorage('profile')
-            ->loadByProperties([
-                'type' => 'survey_participants',
-                'is_default' => 1,
-                'field_cell_phone' => $userphone,
-            ]);
-
-        foreach($storage as $profile) {
-            if( preg_replace('/\D+/', '',$userphone) == preg_replace('/\D+/', '',$profile->get('field_cell_phone')->value) && $startdate && $enddate) {
-
-                $profile->set('field_partic_suspension_dates', array(
-                    'value' => $startdate,
-                    'end_value' => $enddate,
-                    ));
-                $profile->save();
-            } elseif (preg_replace('/\D+/', '',$userphone) == preg_replace('/\D+/', '',$profile->get('field_cell_phone')->value) && !$startdate && !$enddate)
-            {
-                $suspension = $profile->get('field_partic_suspension_dates')->value ? $profile->get('field_partic_suspension_dates')->value : null ;
-                $suspension_end =  $profile->get('field_partic_suspension_dates')->end_value ? $profile->get('field_partic_suspension_dates')->end_value : null;
-                $inactive = $profile->get('field_set_surveys_to_inactive')->value == '2' ? 2 : null;
-                return array($suspension,$suspension_end,$inactive);
-
-            }
-        }
+        return $nids[0];
+      }
 
     }
-
-
-
     public function surveynodeform_prov_summary($provid) {
-      drupal_add_css(drupal_get_path('module', 'surveynodeform') . '/css/surveyform.css');
+      $form['#attached']['library'][] = 'surveynodeform/surveynodeform.library';
       $statearray = surveynodeform_provider_statename($provid);
       $stateid = $statearray[1];
       $currepper = surveynodeform_get_curr_rep_per($stateid);
-      $georgiaid = get_state_id('Georgia');
-      $massid = get_state_id('Massachusetts');
-      $mdid = get_state_id('Maryland');
+      $georgiaid = $this->surveynodeform_get_state_id('Georgia');
+      $massid = $this->surveynodeform_get_state_id('Massachusetts');
+      $mdid = $this->surveynodeform_get_state_id('Maryland');
       $query1 = \Drupal::entityQuery('node');
         $query1->condition('bundle', "individual")
             ->condition('status', NodeInterface::PUBLISHED)
             ->condition('og_group_ref', 'target_id', $provid);
               $results1 = $query1->execute();
-              $personkeys = array_keys($results1['node']);
-              $provnode = \Drupal\node\Entity\Node::load()($provid);
+              $personkeys = \Drupal\node\Entity\Node::loadMultiple($results1);
+              $provnode = \Drupal\node\Entity\Node::load($provid);
               $providername = $provnode->title;
-              $reportingnode = \Drupal\node\Entity\Node::load()($currepper);
+              $reportingnode = \Drupal\node\Entity\Node::load($currepper);
               $reportingperiod = date("F/j/Y", strtotime($reportingnode->field_rp_date_range['und'][0]['value'])) . " to " . date("F/j/Y", strtotime($reportingnode->field_rp_date_range['und'][0]['value2']));
 
       // Adding a new state: add state id
@@ -133,29 +72,26 @@ class ProviderSummaryService
           ->condition('field_reporting_period', 'target_id', $currepper)
           ->condition('field_individual', 'target_id', $personkeys, 'IN');
             $results = $query->execute();
-            $firstarray = array_keys($results['node']);
+            $firstarray = \Drupal\node\Entity\Node::loadMultiple($results);
             $personids = array();
       // new state: change stateid
       switch($stateid) {
         case $massid:
           return $this->surveynodeform_ma_prov_sum_results($statearray,$stateid,$currepper,$providername,$reportingperiod,$firstarray,$provid);
-        break;
         case $mdid:
           return $this->surveynodeform_md_prov_sum_results($statearray,$stateid,$currepper,$providername,$reportingperiod,$firstarray,$provid);
-        break;
 
         case $georgiaid:
           return $this->surveynodeform_ga_prov_sum_results($statearray,$stateid,$currepper,$providername,$reportingperiod,$firstarray,$provid);
-        break;
         }
     }
     public function surveynodeform_ga_prov_sum_results($statearray,$stateid,$currepper,$providername,$reportingperiod,$firstarray,$provid) {
 
       foreach($firstarray as $firstnode) {
-          $personode = \Drupal\node\Entity\Node::load()($firstnode);
+          $personode = \Drupal\node\Entity\Node::load($firstnode);
           $personids []= $personode->field_individual['und'][0]['target_id'];
         }
-      $datanode = array_intersect($personkeys,$personids);
+      //$datanode = array_intersect($personkeys,$personids);
       $namearray = array('indcomp','grpinteg','selfemp','facbased','combased','facbasednonwork');
       $headerarray = array(' ','Total Served
       (unduplicated count)','Individual competitive job','Group integrated job','Self employment','Facility based job', 'Community based non work', 'Facility based non work');
@@ -197,7 +133,30 @@ class ProviderSummaryService
       $ttlcount = 0;
       $workttlcount = 0;
       foreach($firstarray as $eachnode) {
-        $thisnode = \Drupal\node\Entity\Node::load()($eachnode);
+        $thisnode = \Drupal\node\Entity\Node::load($eachnode);
+        $indcompptocount = 0;
+        $indcontptocount = 0;
+        $grpintegptocount = 0;
+        $facbasedptocount = 0;
+        $indcontsetasidecount = 0;
+        $grpintegsetasidecount = 0;
+        $facbasedsetasidecount = 0;
+        $indcomphrs = 0;
+        $indconthrs = 0;
+        $grpinteghrs = 0;
+        $selfemphrs = 0;
+        $facbasedhrs = 0;
+        $combasedhrs = 0;
+        $indcompwage = 0;
+        $indcontwage = 0;
+        $grpintegwage = 0;
+        $selfempwage = 0;
+        $facbasedwage = 0;
+        $indcompcount = 0;
+        $grpintegcount = 0;
+        $selfempcount = 0;
+        $facbasedcount = 0;
+        $combasedcount = 0;
 
       //Total counts
       $indcompcheck = !$thisnode->field_indv_comp_hrs || $thisnode->field_indv_comp_hrs['und'][0]['value'] == '' ? false:true;
@@ -266,30 +225,30 @@ class ProviderSummaryService
       $facbasedhrspct = $facbasedhrspct > 0 ? number_format((float)$facbasedhrspct, 1, '.', '') . "%" : " -- ";
       $combasedhrspct = $combasedhrs > 0 ? ($combasedhrs/$ttlhour) *100 : 0;
       $combasedhrspct = $combasedhrspct > 0 ? number_format((float)$combasedhrspct, 1, '.', '') . "%" : " -- ";
-      $indcompmeanhrs = $indcomphrs > 0 ? $indcomphrs/$indcompcount: 0;
+      $indcompmeanhrs = $indcomphrs > 0 && $indcompcount > 0 ? floatval($indcomphrs)/floatval($indcompcount): 0;
       $indcompmeanhrs = $indcompmeanhrs > 0 ? number_format((float)$indcompmeanhrs, 1, '.', '') : " -- ";
-      $grpintegmeanhrs = $grpinteghrs > 0 ? $grpinteghrs/$grpintegcount: 0;
+      $grpintegmeanhrs = $grpinteghrs > 0 && $grpintegcount > 0 ? $grpinteghrs/$grpintegcount: 0;
       $grpintegmeanhrs = $grpintegmeanhrs > 0 ? number_format((float)$grpintegmeanhrs, 1, '.', '') : " -- ";
-      $selfempmeanhrs = $selfemphrs > 0 ? $selfemphrs/$selfempcount: 0;
+      $selfempmeanhrs = $selfemphrs > 0 && $selfempcount > 0 ? $selfemphrs/$selfempcount: 0;
       $selfempmeanhrs = $selfempmeanhrs > 0 ? number_format((float)$selfempmeanhrs, 1, '.', '') : " -- ";
-      $facbasedmeanhrs = $facbasedhrs > 0 ? $facbasedhrs/$facbasedcount: 0;
+      $facbasedmeanhrs = $facbasedhrs > 0 && $facbasedcount > 0 ? $facbasedhrs/$facbasedcount: 0;
       $facbasedmeanhrs = $facbasedmeanhrs > 0 ? number_format((float)$facbasedmeanhrs, 1, '.', '') : " -- ";
-      $combasedmeanhrs = $combasedhrs > 0 ? $combasedhrs/$combasedcount: 0;
+      $combasedmeanhrs = $combasedhrs > 0 && $combasedcount > 0 ? $combasedhrs/$combasedcount: 0;
       $combasedmeanhrs = $combasedmeanhrs > 0 ? number_format((float)$combasedmeanhrs, 1, '.', '') : " -- ";
       $hoursarray = array(array("Mean hours per person participating in activity in two-week period*",$ttlcount,$indcompmeanhrs,$grpintegmeanhrs,$selfempmeanhrs . "*",$facbasedmeanhrs,$combasedmeanhrs),array("Percent of total hours in activity for two-week period",$ttlcount,$indcomphrspct,$grpinteghrspct,$selfemphrspct,$facbasedhrspct,$combasedhrspct));
-      $indcompmeanwage = $indcompwage > 0 ? $indcompwage/$indcompcount: 0;
+      $indcompmeanwage = $indcompwage > 0 && $indcompcount > 0 ? $indcompwage/$indcompcount: 0;
       $indcompmeanwage = $indcompmeanwage > 0 ? "$" . number_format((float)$indcompmeanwage, 2, '.', '') : " -- ";
-      $grpintegmeanwage = $grpintegwage > 0 ? $grpintegwage/$grpintegcount: 0;
+      $grpintegmeanwage = $grpintegwage > 0 && $grpintegcount > 0 ? $grpintegwage/$grpintegcount: 0;
       $grpintegmeanwage = $grpintegmeanwage > 0 ? "$" . number_format((float)$grpintegmeanwage, 2, '.', '') : " -- ";
-      $selfempmeanwage = $selfempwage > 0 ? $selfempwage/$selfempcount: 0;
+      $selfempmeanwage = $selfempwage > 0 && $selfempcount > 0 ? $selfempwage/$selfempcount: 0;
       $selfempmeanwage = $selfempmeanwage > 0 ? "$" . number_format((float)$selfempmeanwage, 2, '.', '') : " -- ";
-      $facbasedmeanwage = $facbasedwage > 0 ? $facbasedwage/$facbasedcount: 0;
+      $facbasedmeanwage = $facbasedwage > 0 && $facbasedcount > 0 ? $facbasedwage/$facbasedcount: 0;
       $facbasedmeanwage = $facbasedmeanwage > 0 ? "$" . number_format((float)$facbasedmeanwage, 2, '.', '') : " -- ";
-      $indcompptopct = $indcompptocount > 0 ? ($indcompptocount/$indcompcount) * 100 : 0;
+      $indcompptopct = $indcompptocount > 0 && $indcompcount > 0 ? ($indcompptocount/$indcompcount) * 100 : 0;
       $indcompptopct = number_format((float)$indcompptopct, 1, '.', '') . "%";
-      $grpintegptopct = $grpintegptocount > 0 ? ($grpintegptocount/$grpintegcount) * 100 : 0;
+      $grpintegptopct = $grpintegptocount > 0 && $grpintegcount > 0 ? ($grpintegptocount/$grpintegcount) * 100 : 0;
       $grpintegptopct = number_format((float)$grpintegptopct, 1, '.', '') . "%";
-      $facbasedptopct = $facbasedptocount > 0 ? ($facbasedptocount/$facbasedcount) * 100 : 0;
+      $facbasedptopct = $facbasedptocount > 0 && $facbasedcount > 0 ? ($facbasedptocount/$facbasedcount) * 100 : 0;
       $facbasedptopct = number_format((float)$facbasedptopct, 1, '.', '') . "%";
       $wagesarray = array(array("Mean two-week wage*",$ttlcount,$indcompmeanwage,$grpintegmeanwage,$selfempmeanwage . "*",$facbasedmeanwage),array("Percent earning paid time off"," -- ",$indcompptopct,$grpintegptopct," -- ",$facbasedptopct)
       );
@@ -311,7 +270,7 @@ class ProviderSummaryService
     public function surveynodeform_md_prov_sum_results($statearray,$stateid,$currepper,$providername,$reportingperiod,$firstarray,$provid) {
 
       foreach($firstarray as $firstnode) {
-          $personode = \Drupal\node\Entity\Node::load()($firstnode);
+          $personode = \Drupal\node\Entity\Node::load($firstnode);
           $personids []= $personode->field_individual['und'][0]['target_id'];
         }
       $datanode = array_intersect($personkeys,$personids);
@@ -354,8 +313,33 @@ class ProviderSummaryService
       $ttlcount = 0;
       $workttlcount = 0;
       foreach($firstarray as $eachnode) {
-        $thisnode = \Drupal\node\Entity\Node::load()($eachnode);
-
+        $thisnode = \Drupal\node\Entity\Node::load($eachnode);
+      $indcompptocount = 0;
+      $indcontptocount = 0;
+      $grpintegptocount = 0;
+      $facbasedptocount = 0;
+      $indcontsetasidecount = 0;
+      $grpintegsetasidecount = 0;
+      $facbasedsetasidecount = 0;
+      $indcomphrs = 0;
+      $indconthrs = 0;
+      $grpinteghrs = 0;
+      $selfemphrs = 0;
+      $facbasedhrs = 0;
+      $combasedhrs = 0;
+      $indcompwage = 0;
+      $indcontwage = 0;
+      $grpintegwage = 0;
+      $selfempwage = 0;
+      $facbasedwage = 0;
+      $facbasedcount = 0;
+      $indcompcount = 0;
+      $indcontcount = 0;
+      $grpintegcount = 0;
+      $selfempcount = 0;
+      $facbasedcount = 0;
+      $combasedcount = 0;
+      $facbasednonworkcount = 0;
       //Total counts
       $indcompcheck = !$thisnode->field_indv_comp_hrs || $thisnode->field_indv_comp_hrs['und'][0]['value'] == '' ? false:true;
       if($indcompcheck) $indcompcount ++;
@@ -433,42 +417,42 @@ class ProviderSummaryService
       $facbasedhrspct = $facbasedhrspct > 0 ? number_format((float)$facbasedhrspct, 1, '.', '') . "%" : " -- ";
       $combasedhrspct = $combasedhrs > 0 ? ($combasedhrs/$ttlhour) *100 : 0;
       $combasedhrspct = $combasedhrspct > 0 ? number_format((float)$combasedhrspct, 1, '.', '') . "%" : " -- ";
-      $indcompmeanhrs = $indcomphrs > 0 ? $indcomphrs/$indcompcount: 0;
+      $indcompmeanhrs = $indcomphrs > 0 && $indcompcount > 0 ? $indcomphrs/$indcompcount: 0;
       $indcompmeanhrs = $indcompmeanhrs > 0 ? number_format((float)$indcompmeanhrs, 1, '.', '') : " -- ";
-      $indcontmeanhrs = $indconthrs > 0 ? $indconthrs/$indcontcount: 0;
+      $indcontmeanhrs = $indconthrs > 0 && $indcontcount > 0 ? $indconthrs/$indcontcount: 0;
       $indcontmeanhrs = $indcontmeanhrs > 0 ? number_format((float)$indcontmeanhrs, 1, '.', '') : " -- ";
-      $grpintegmeanhrs = $grpinteghrs > 0 ? $grpinteghrs/$grpintegcount: 0;
+      $grpintegmeanhrs = $grpinteghrs > 0 && $grpintegcount > 0 ? $grpinteghrs/$grpintegcount: 0;
       $grpintegmeanhrs = $grpintegmeanhrs > 0 ? number_format((float)$grpintegmeanhrs, 1, '.', '') : " -- ";
-      $selfempmeanhrs = $selfemphrs > 0 ? $selfemphrs/$selfempcount: 0;
+      $selfempmeanhrs = $selfemphrs > 0 && $selfempcount > 0 ? $selfemphrs/$selfempcount: 0;
       $selfempmeanhrs = $selfempmeanhrs > 0 ? number_format((float)$selfempmeanhrs, 1, '.', '') : " -- ";
-      $facbasedmeanhrs = $facbasedhrs > 0 ? $facbasedhrs/$facbasedcount: 0;
+      $facbasedmeanhrs = $facbasedhrs > 0 && $facbasedcount > 0 ? $facbasedhrs/$facbasedcount: 0;
       $facbasedmeanhrs = $facbasedmeanhrs > 0 ? number_format((float)$facbasedmeanhrs, 1, '.', '') : " -- ";
-      $combasedmeanhrs = $combasedhrs > 0 ? $combasedhrs/$combasedcount: 0;
+      $combasedmeanhrs = $combasedhrs > 0 && $combasedcount > 0 ? $combasedhrs/$combasedcount: 0;
       $combasedmeanhrs = $combasedmeanhrs > 0 ? number_format((float)$combasedmeanhrs, 1, '.', '') : " -- ";
       $hoursarray = array(array("Mean hours per person participating in activity in two-week period*",$ttlcount,$indcompmeanhrs,$indcontmeanhrs,$grpintegmeanhrs,$selfempmeanhrs . "*",$facbasedmeanhrs,$combasedmeanhrs),array("Percent of total hours in activity for two-week period",$ttlcount,$indcomphrspct,$indconthrspct,$grpinteghrspct,$selfemphrspct,$facbasedhrspct,$combasedhrspct));
-      $indcompmeanwage = $indcompwage > 0 ? $indcompwage/$indcompcount: 0;
+      $indcompmeanwage = $indcompwage > 0 && $indcompcount > 0 ? $indcompwage/$indcompcount: 0;
       $indcompmeanwage = $indcompmeanwage > 0 ? "$" . number_format((float)$indcompmeanwage, 2, '.', '') : " -- ";
-      $indcontmeanwage = $indcontwage > 0 ? $indcontwage/$indcontcount: 0;
+      $indcontmeanwage = $indcontwage > 0 && $indcontcount > 0 ? $indcontwage/$indcontcount: 0;
       $indcontmeanwage = $indcontmeanwage > 0 ? "$" . number_format((float)$indcontmeanwage, 2, '.', '') : " -- ";
-      $grpintegmeanwage = $grpintegwage > 0 ? $grpintegwage/$grpintegcount: 0;
+      $grpintegmeanwage = $grpintegwage > 0 && $grpintegcount > 0 ? $grpintegwage/$grpintegcount: 0;
       $grpintegmeanwage = $grpintegmeanwage > 0 ? "$" . number_format((float)$grpintegmeanwage, 2, '.', '') : " -- ";
-      $selfempmeanwage = $selfempwage > 0 ? $selfempwage/$selfempcount: 0;
+      $selfempmeanwage = $selfempwage > 0 && $selfempcount > 0 ? $selfempwage/$selfempcount: 0;
       $selfempmeanwage = $selfempmeanwage > 0 ? "$" . number_format((float)$selfempmeanwage, 2, '.', '') : " -- ";
-      $facbasedmeanwage = $facbasedwage > 0 ? $facbasedwage/$facbasedcount: 0;
+      $facbasedmeanwage = $facbasedwage > 0 && $facbasedcount > 0 ? $facbasedwage/$facbasedcount: 0;
       $facbasedmeanwage = $facbasedmeanwage > 0 ? "$" . number_format((float)$facbasedmeanwage, 2, '.', '') : " -- ";
-      $indcompptopct = $indcompptocount > 0 ? ($indcompptocount/$indcompcount) * 100 : 0;
+      $indcompptopct = $indcompptocount > 0 && $indcompcount > 0 ? ($indcompptocount/$indcompcount) * 100 : 0;
       $indcompptopct = number_format((float)$indcompptopct, 1, '.', '') . "%";
-      $indcontptopct = $indcontptocount > 0 ? ($indcontptocount/$indcontcount) * 100 : 0;
+      $indcontptopct = $indcontptocount > 0 && $indcontcount > 0 ? ($indcontptocount/$indcontcount) * 100 : 0;
       $indcontptopct = number_format((float)$indcontptopct, 1, '.', '') . "%";
-      $grpintegptopct = $grpintegptocount > 0 ? ($grpintegptocount/$grpintegcount) * 100 : 0;
+      $grpintegptopct = $grpintegptocount > 0 && $grpintegcount > 0 ? ($grpintegptocount/$grpintegcount) * 100 : 0;
       $grpintegptopct = number_format((float)$grpintegptopct, 1, '.', '') . "%";
-      $facbasedptopct = $facbasedptocount > 0 ? ($facbasedptocount/$facbasedcount) * 100 : 0;
+      $facbasedptopct = $facbasedptocount > 0 && $facbasedcount > 0 ? ($facbasedptocount/$facbasedcount) * 100 : 0;
       $facbasedptopct = number_format((float)$facbasedptopct, 1, '.', '') . "%";
-      $indcontsetasidepct = $indcontsetasidecount > 0 ? ($indcontsetasidecount/$indcontcount) * 100 : 0;
+      $indcontsetasidepct = $indcontsetasidecount > 0 && $indcontcount > 0 ? ($indcontsetasidecount/$indcontcount) * 100 : 0;
       $indcontsetasidepct = number_format((float)$indcontsetasidepct, 1, '.', '') . "%";
-      $grpintegsetasidepct = $grpintegsetasidecount > 0 ? ($grpintegsetasidecount/$grpintegcount) * 100 : 0;
+      $grpintegsetasidepct = $grpintegsetasidecount > 0 && $grpintegcount > 0 ? ($grpintegsetasidecount/$grpintegcount) * 100 : 0;
       $grpintegsetasidepct = number_format((float)$grpintegsetasidepct, 1, '.', '') . "%";
-      $facbasedsetasidepct = $facbasedsetasidecount > 0 ? ($facbasedsetasidecount/$facbasedcount) * 100 : 0;
+      $facbasedsetasidepct = $facbasedsetasidecount > 0 && $facbasedcount ? ($facbasedsetasidecount/$facbasedcount) * 100 : 0;
       $facbasedsetasidepct = number_format((float)$facbasedsetasidepct, 1, '.', '') . "%";
       $wagesarray = array(array("Mean two-week wage*",$ttlcount,$indcompmeanwage,$indcontmeanwage,$grpintegmeanwage,$selfempmeanwage . "*",$facbasedmeanwage),array("Percent earning paid time off"," -- ",$indcompptopct,$indcontptopct,$grpintegptopct," -- ",$facbasedptopct),array("Percent on set-aside contract"," "," -- ",$indconthrspct,$grpinteghrspct," -- ",$facbasedhrspct)
       );
@@ -489,10 +473,10 @@ class ProviderSummaryService
     public function surveynodeform_ma_prov_sum_results($statearray,$stateid,$currepper,$providername,$reportingperiod,$firstarray,$provid) {
 
               foreach($firstarray as $firstnode) {
-                 $personode = \Drupal\node\Entity\Node::load()($firstnode);
+                 $personode = \Drupal\node\Entity\Node::load($firstnode);
                   $personids []= $personode->field_individual['und'][0]['target_id'];
                 }
-              $datanode = array_intersect($personkeys,$personids);
+              //$datanode = array_intersect($personkeys,$personids);
               $namearray = array('indcomp','grpinteg','selfemp','jobsearch','wraparound');
               $headerarray = array(' ','Total Served
               (unduplicated count)','Individual employment','Group supported job','Self employment','Job search and exploration', 'Wrap-around services');
@@ -532,7 +516,29 @@ class ProviderSummaryService
               $workcount = 0;
 
               foreach($firstarray as $eachnode) {
-                $thisnode = \Drupal\node\Entity\Node::load()($eachnode);
+                $indcomphrs = 0;
+                $indcompptocount = 0;
+                $selfemphrs = 0;
+                $grpinteghrs =0;
+                $indcompwage = 0;
+                $grpintegwage = 0;
+                $selfempwage = 0;
+                $indcompptocount = 0;
+                $indcontptocount = 0;
+                $grpintegptocount = 0;
+                $facbasedptocount = 0;
+                $indcontsetasidecount = 0;
+                $grpintegsetasidecount = 0;
+                $facbasedsetasidecount = 0;
+                $facbasedcount = 0;
+                $indcompcount = 0;
+                $indcontcount = 0;
+                $grpintegcount = 0;
+                $selfempcount = 0;
+                $facbasedcount = 0;
+                $combasedcount = 0;
+                $facbasednonworkcount = 0;
+                $thisnode = \Drupal\node\Entity\Node::load($eachnode);
                 $indcompcheck = !$thisnode->field_indv_comp_hrs || $thisnode->field_indv_comp_hrs['und'][0]['value'] == '' ? false:true;
                 if($indcompcheck) $indcompcount ++;
                 $grpintegcheck = !$thisnode->field_grp_integ_hrs || $thisnode->field_grp_integ_hrs['und'][0]['value'] == '' ? false:true;
@@ -581,19 +587,19 @@ class ProviderSummaryService
                 $grpinteghrspct = $grpinteghrspct > 0 ? number_format((float)$grpinteghrspct, 1, '.', '') . "%" : " -- ";
                 $selfemphrspct = $selfemphrs > 0 ? ($selfemphrs/$ttlhour) *100 : 0;
                 $selfemphrspct = $selfemphrspct > 0 ? number_format((float)$selfemphrspct, 1, '.', '') . "%" : " -- ";
-                $indcompmeanhrs = $indcomphrs > 0 ? $indcomphrs/$indcompcount: 0;
+                $indcompmeanhrs = $indcomphrs > 0 && $indcompcount > 0 ? $indcomphrs/$indcompcount: 0;
                 $indcompmeanhrs = $indcompmeanhrs > 0 ? number_format((float)$indcompmeanhrs, 1, '.', '') : " -- ";
-                $grpintegmeanhrs = $grpinteghrs > 0 ? $grpinteghrs/$grpintegcount: 0;
+                $grpintegmeanhrs = $grpinteghrs > 0 && $grpintegcount > 0 ? $grpinteghrs/$grpintegcount: 0;
                 $grpintegmeanhrs = $grpintegmeanhrs > 0 ? number_format((float)$grpintegmeanhrs, 1, '.', '') : " -- ";
-                $selfempmeanhrs = $selfemphrs > 0 ? $selfemphrs/$selfempcount: 0;
+                $selfempmeanhrs = $selfemphrs > 0 && $selfempcount > 0 ? $selfemphrs/$selfempcount: 0;
                 $selfempmeanhrs = $selfempmeanhrs > 0 ? number_format((float)$selfempmeanhrs, 1, '.', '') : " -- ";
-                $indcompmeanwage = $indcompwage > 0 ? $indcompwage/$indcompcount: 0;
+                $indcompmeanwage = $indcompwage > 0 && $indcompcount > 0 ? $indcompwage/$indcompcount: 0;
                 $indcompmeanwage = $indcompmeanwage > 0 ? "$" . number_format((float)$indcompmeanwage, 2, '.', '') : " -- ";
-                $grpintegmeanwage = $grpintegwage > 0 ? $grpintegwage/$grpintegcount: 0;
+                $grpintegmeanwage = $grpintegwage > 0 && $grpintegcount > 0 ? $grpintegwage/$grpintegcount: 0;
                 $grpintegmeanwage = $grpintegmeanwage > 0 ? "$" . number_format((float)$grpintegmeanwage, 2, '.', '') : " -- ";
-                $selfempmeanwage = $selfempwage > 0 ? $selfempwage/$selfempcount: 0;
+                $selfempmeanwage = $selfempwage > 0 && $selfempcount > 0 ? $selfempwage/$selfempcount: 0;
                 $selfempmeanwage = $selfempmeanwage > 0 ? "$" . number_format((float)$selfempmeanwage, 2, '.', '') : " -- ";
-                $indcompptopct = $indcompptocount > 0 ? ($indcompptocount/$indcompcount) * 100 : 0;
+                $indcompptopct = $indcompptocount > 0 && $indcompcount > 0 ? ($indcompptocount/$indcompcount) * 100 : 0;
                 $indcompptopct = number_format((float)$indcompptopct, 1, '.', '') . "%";
               $wagesarray = array(array("Mean four-week wage*",$workcount,$indcompmeanwage,$grpintegmeanwage,$selfempmeanwage . "*"),array("Percent earning paid time off",$indcompcount,$indcompptopct," -- ","--")
             );
@@ -655,7 +661,9 @@ class ProviderSummaryService
 
     public function surveynodeform_preprocess_node(&$vars){
       global $nid;
-        if (arg(0) == 'node' && is_numeric(arg(1)))   $nid = arg(1);
+      $current_path = \Drupal::service('path.current')->getPath();
+      $path_args = explode('/', $current_path);
+        if ($path_args[0] == 'node' && is_numeric($path_args[1]))   $nid = $path_args[1];
 
 
 

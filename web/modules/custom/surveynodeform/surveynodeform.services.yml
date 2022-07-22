@@ -1,4 +1,4 @@
 services:
-  surveycampaign.old_nodes:
-     class: \Drupal\surveycampaign\ProviderSummary
+  surveynodeform.providersummary:
+     class: \Drupal\surveynodeform\ProviderSummaryService
      arguments: ["@entity_type.manager"]

@@ -1,0 +1,37 @@
+ $items['sdata_rp/create_individual_data_nodes'] = array(
+   'title' => 'Batch fix',
+   'page callback' => '_sdata_rp_batch_create_individual_data_nodes',
+   'page arguments' => array(2),
+   'access arguments' => array('administer modules'),
+ );
+ $items['sdata_rp/submit_data'] = array(
+   'title' => 'Submit data',
+   'page callback' => '_sdata_rp_submit_data',
+   'page arguments' => array(2),
+   'access arguments' => array('sdata submit individual data'),
+ );
+ $items['sdata_rp/submit_data_cie'] = array(
+   'title' => 'Submit data',
+   'page callback' => '_sdata_rp_submit_data_cie',
+   'page arguments' => array(2),
+   'access arguments' => array('sdata submit individual data'),
+ );
+ $items['sdata_rp/batch-enrol'] = array(
+   'title' => 'Submit data',
+   'page callback' => 'sdata_rp_batch_enrol',
+   'page arguments' => array(2),
+   'access arguments' => array('administer modules'),
+ );
+
+ $items['sdata_rp/ga-batch-enrol'] = array(
+  'title' => 'Submit data',
+  'page callback' => 'sdata_rp_ga_batch_enrol',
+  'page arguments' => array(2),
+  'access arguments' => array('edit any individual_data_ga content'),
+sdata_rp.createindnodes:
+  path: 'sdata_rp/create_individual_data_nodes/{reporting_period_node_id}'
+  defaults:
+    _controller: '\Drupal\sdata_rp\Controller\SurveycampaignController::createindnodes'
+    _title: 'Create individual Data Nodes'
+  requirements:
+    _permission: 'administer modules'

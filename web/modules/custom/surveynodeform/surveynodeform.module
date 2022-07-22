@@ -39,19 +39,19 @@ function surveynodeform_get_prov_id($nid,$type) {
   $query = \Drupal::entityQuery('node');
     $query->condition('bundle', "$type")
       ->condition('entity_id', $nid, '=')
-      ->condition('status', NodeInterface::PUBLISHED)
+      ->condition('status', 1)
       ->execute();
       $result = $query->execute();
-      if (!isset($result['node'])) { return; }
+      if (!$result) { return; }
         else {
-        $datanode = array_keys($result['node']);
-    $mdind = \Drupal\node\Entity\Node::load()($datanode[0]);
-    $provid = $mdind->og_group_ref[surveynodeform][0]['target_id'];
+        $datanode = \Drupal\node\Entity\Node::loadMultiple($result);
+    $mdind = \Drupal\node\Entity\Node::load($datanode[0]);
+    $provid = $mdind->og_group_ref['und'][0]['target_id'];
     return $provid;
   }
 }
 function surveynodeform_get_curr_rep_per($stateid) {
-  $state = \Drupal\node\Entity\Node::load()($stateid);
+  $state = \Drupal\node\Entity\Node::load($stateid);
   $current_reporting_period_nid = $state->field_current_reporting_period['und'][0]['target_id'];
   return $current_reporting_period_nid;
 }
@@ -60,39 +60,22 @@ function surveynodeform_provider_statename($provid) {
   $query = \Drupal::entityQuery('node');
   $query->condition('bundle', "provider")
       ->condition('entity_id', $provid)
-      ->condition('status', NodeInterface::PUBLISHED);
+      ->condition('status', 1);
 
       $results = $query->execute();
-      $provnode = array_keys($results['node']);
-      $provgroup = \Drupal\node\Entity\Node::load()($provnode[0]);
+      $provnode  = \Drupal\node\Entity\Node::loadMultiple($results);
+      $provgroup = \Drupal\node\Entity\Node::load($provnode[0]);
       $stateid = $provgroup->og_group_provider_state_ref['und'][0]['target_id'];
       $query2 = \Drupal::entityQuery('node');
       $query2->condition('bundle', "state")
           ->condition('entity_id', $stateid)
-          ->condition('status', NodeInterface::PUBLISHED);
+          ->condition('status', 1);
       $results2 = $query2->execute();
-      $statenode = array_keys($results2['node']);
-      $stategroup = \Drupal\node\Entity\Node::load()($statenode[0]);
+      $statenode  = \Drupal\node\Entity\Node::loadMultiple($results2);
+      $stategroup = \Drupal\node\Entity\Node::load($statenode[0]);
       $statename = array($stategroup->title,$stategroup->nid);
   return $statename;
 }
-//new state: workaround to get state node id
-function get_state_id($state) {
-  $query = \Drupal::entityQuery('node');
-  $result = $query
-    ->condition('type', 'state')
-    ->condition('title', $state)
-    ->execute();
-
-    $nids = array();
-  if (isset($result['node'])) {
-      $nids = array_keys($result['node']);
-
-    return $nids[0];
-  }
-
-}
-
 
 // new state: duplicate surveynodeform_xx_prov_sum_results function
 
@@ -132,7 +115,7 @@ function surveynodeform_og_delete_form_redirect($form, &$form_state) {
     $url = \Drupal::request()->query->all();
     $reportingperiod_id = $path_args[8];
 
-    $indnode = \Drupal\node\Entity\Node::load()($indnodeid);
+    $indnode = \Drupal\node\Entity\Node::load($indnodeid);
 
    if($indnode->field_cie_individual && $indnode->field_cie_individual['und'][0]['value'] == '1') {
       $destination = "provider/$provid/individuals-cie/$reportingperiod_id";
@@ -151,8 +134,8 @@ function surveynodeform_individual_data_ga_node_form_submit($form, &$form_state)
   $individual_id = $form_state['values']['field_individual']['und'][0]['target_id'] ;
 
   if($individual_id) {
-    $individual_node = \Drupal\node\Entity\Node::load()($individual_id);
-    $node_wrapper = entity_metadata_wrapper('node', $individual_node);
+    $individual_node = \Drupal\node\Entity\Node::load($individual_id);
+    //$node_wrapper = entity_metadata_wrapper('node', $individual_node);
 
 
 
@@ -172,9 +155,9 @@ function surveynodeform_individual_data_ga_node_form_submit($form, &$form_state)
 
 
 
-        $node_wrapper->revision->set(1);
-        $node_wrapper->field_date_of_entry_into_ende->set($insertdate);
-        $node_wrapper->save();
+        $individual_node->revision->set(0,1);
+        $individual_node->field_date_of_entry_into_ende->set(0,$insertdate);
+        $individual_node->save();
 
 
 
@@ -183,8 +166,8 @@ function surveynodeform_individual_data_ga_node_form_submit($form, &$form_state)
 
 
       $extended = $individual_node->field_date_of_entry_into_ende['und'][0]['value'] ? $individual_node->field_date_of_entry_into_ende['und'][0]['value']: null;
-      $node_wrapper->field_date_of_entry_into_ende->set(NULL);
-      $node_wrapper->save();
+      $individual_node->field_date_of_entry_into_ende->set(0,NULL);
+      $individual_node->save();
 
     }
   }
@@ -202,13 +185,14 @@ function surveynodeform_form_alter(&$form, &$form_state, $form_id) {
   global $nid;
   $current_path = \Drupal::service('path.current')->getPath();
   $path_args = explode('/', $current_path);
+  $datanode = NULL;
   if ($path_args[0] == 'node' && is_numeric($path_args[1]))
   { $nid = $path_args[1];
-    $datanode = \Drupal\node\Entity\Node::load()($nid);
+    $datanode = \Drupal\node\Entity\Node::load($nid);
   }
   $form['#attributes']['class'][] = 'clearfix';
   $url = \Drupal::request()->query->all();
-  $reportingperiod_id = $url && $url['rp'] ? $url['rp'] : $datanode->field_reporting_period['und'][0]['target_id'];
+  $reportingperiod_id = $url && $url['rp'] && $datanode ? $url['rp'] : $datanode->field_reporting_period['und'][0]['target_id'];
 
   if($form_id == 'provider_node_form') {
     global $theme;
@@ -224,7 +208,7 @@ function surveynodeform_form_alter(&$form, &$form_state, $form_id) {
 
           $form['#prefix']= "<h3>Are you sure you are ready to submit your user data?</h3><p>You will no longer be able to edit individuals or data after you submit this form.  Please make sure the contact information below is correct, then select the submit button if you are ready. <a href=\"/provider/" . $path_args[1] . "/individuals/$reportingperiod_id\">Back to list of individuals</a></p>";
         }
-        elseif( $url['status'] && $url['status'] == 'final' && $stateid = '116038')
+        elseif( $url['status'] && $url['status'] == 'final' && $stateid == '116038')
         {
           $form['#prefix']= "<h3>Are you sure you are ready to submit your non-CIE user data?</h3><p>You will no longer be able to edit non-CIE individuals or data after you submit this form.  Please make sure the contact information below is correct, then select the submit button if you are ready. <a href=\"/provider/" . $path_args[1] . "/individuals/$reportingperiod_id\">Back to list of non-CIE individuals</a></p>";
         }
@@ -276,10 +260,10 @@ function surveynodeform_form_alter(&$form, &$form_state, $form_id) {
 
 
     $individual_id = $datanode->field_individual['und'][0]['target_id'];
-    $individual_node = \Drupal\node\Entity\Node::load()($individual_id);
+    $individual_node = \Drupal\node\Entity\Node::load($individual_id);
 
     $reportingperiod_id = $datanode->field_reporting_period['und'][0]['target_id'];
-    $reporting_period_node = \Drupal\node\Entity\Node::load()($reportingperiod_id);
+    $reporting_period_node = \Drupal\node\Entity\Node::load($reportingperiod_id);
     $cieperiod = $reporting_period_node->field_georgia_cie['und'][0]['value'] == 1 ? true : false;
     $cie_individual = $individual_node->field_cie_individual['und'][0]['value'] == 1 ? true : false;
     if($cie_individual) {
@@ -334,8 +318,6 @@ function surveynodeform_form_alter(&$form, &$form_state, $form_id) {
 
       unset($form['#groups']['group_fac_non_work']);
       unset($form['#fieldgroups']['group_fac_non_work']);
-    } elseif
-    ($cie_individual && $cieperiod) {
       $form['#attributes']['class'][] = 'ciePeriod';
     }
      else
@@ -358,11 +340,16 @@ function surveynodeform_form_alter(&$form, &$form_state, $form_id) {
     if ($path_args[1] == 'node' && is_numeric($path_args[2]))   $provid = $path_args[2];
     $ogid = $path_args[6];
     $indnodeid = surveynodeform_get_og_membership_entity_id($ogid);
-    $indnode = \Drupal\node\Entity\Node::load()($indnodeid);
+    $indnode = \Drupal\node\Entity\Node::load($indnodeid);
     if($indnode->field_cie_individual && $indnode->field_cie_individual['und'][0]['value'] == '1') $urlslug .= "-cie";
+    $baselink = \Drupal\Core\Link::fromTextAndUrl(t("Cancel"), "/provider/$provid/individuals/$reportingperiod_id$urlslug");
+    $link = $baselink->toRenderable();
+    $link['#attributes'] = array('class' => array('form-cancel-button'));
+    $linkrender = \Drupal\Core\Render\RendererInterface::render($link);
+
     $form['actions']['cancel'] = array(
       '#type'   => 'markup',
-      '#markup' => '<div class="form-cancel-button-wrapper">' . l(t("Cancel"), "/provider/$provid/individuals/$reportingperiod_id$urlslug", array('attributes' => array('class' => array('form-cancel-button')))) . '</div>',
+      '#markup' => '<div class="form-cancel-button-wrapper">' . $linkrender . '</div>',
     );
     $form['#submit'][] = 'surveynodeform_og_delete_form_redirect';
 
@@ -383,7 +370,7 @@ function surveynodeform_form_alter(&$form, &$form_state, $form_id) {
     $form['field_indv_data_partic_why']['und']['#title'] = t('You have checked all the "did not participate" boxes on this form. Why didn\'t this individual participate in an activity? <br />(<span class="redUl">If this individual has been discharged or is deceased, please delete this individual from your list.</span>)');
    $url = \Drupal::request()->query->all();
    $urlp = print_r($url,true);
-   watchdog('get urlp','URL p: ' . $urlp);
+
 
     if ($form_id == 'individual_node_form' && isset($url['p'])) {
       $provid = $url['p'];
@@ -398,16 +385,16 @@ function surveynodeform_form_alter(&$form, &$form_state, $form_id) {
         $destarray = explode('/', $url['destination']);
         $provid = $destarray[1];
         $reportingperiod_id = $destarray[3];
-        watchdog('reporting period id: ', 'reporting id: ' . $reportingperiod_id);
+      //  watchdog('reporting period id: ', 'reporting id: ' . $reportingperiod_id);
       } else
       {
         $provid =  surveynodeform_get_prov_id($nid,'individual');
       }
-      watchdog('provider id ', 'provider id: ' . $provid);
+    //  watchdog('provider id ', 'provider id: ' . $provid);
       $statearray = surveynodeform_provider_statename($provid);
       $statename = $statearray[0];
       $statetid = getTidByName($statename);
-      watchdog('state name and state id: ', $statename . " " .  $statetid);
+  //    watchdog('state name and state id: ', $statename . " " .  $statetid);
       $form['#attached']['library'][] = 'surveynodeform/surveynodeform.' . $statename . '.library';
     }
     else
@@ -518,7 +505,7 @@ function surveynodeform_form_alter(&$form, &$form_state, $form_id) {
     $form['actions']['submit']['#attributes'] = array('class' => array('btn','btn-primary'));
   }
 
-    if (!path_is_admin(current_path())) {
+    if (!\Drupal::service('router.admin_context')->isAdminRoute()) {
       //  drupal_add_js(array('surveynodeform' => array('mdmin' => $mdminimum)), array('type' => 'setting'));
 
       //drupal_add_js(array('surveynodeform' => array('mdmin' => $settings)), 'setting');
@@ -548,7 +535,7 @@ function surveynodeform_form_alter(&$form, &$form_state, $form_id) {
   if (($form['#id'] == 'views-form-admin-views-node-system-1' && (in_array('116038',$_POST['views_bulk_operations']) || in_array('7',$_POST['views_bulk_operations']) ||in_array('10',$_POST['views_bulk_operations']) ) )|| ($form['#id'] == 'node-delete-confirm' && $path_args[0] == 'node' && is_numeric($path_args[1])  && ($path_args[1] == 116038 ||$path_args[1] == 7 ||$path_args[1] == 10 ) ))
   {
     //set a message...
-    drupal_set_message('Warning: don\'t delete states');
+     \Drupal::messenger()->addMessage('Warning: don\'t delete states');
     //stop people from being able to submit the delete form (and in turn stop the delete)
     unset($form['actions']['submit']);
     //set the "cancel" link text to something else
@@ -563,7 +550,7 @@ function getTidByName($name = NULL, $vid = NULL) {
     if (!empty($vid)) {
       $properties['vid'] = $vid;
     }
-    $terms = \Drupal::entityManager()->getStorage('taxonomy_term')->loadByProperties($properties);
+    $terms = \Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadByProperties($properties);
     $term = reset($terms);
 
     return !empty($term) ? $term->id() : 0;
@@ -571,17 +558,17 @@ function getTidByName($name = NULL, $vid = NULL) {
 // Massachusetts settings
 
 function surveynodeform_get_og_membership_entity_id($ogid) {
-  $result = db_query("SELECT og.etid
-    FROM {og_membership} og
-    WHERE og.id=:ogid
-    AND og.entity_type= :entity_type",
-    array(
-      ':ogid' => $ogid,
-      ':entity_type' => 'node',
-    )
-  );
-  $entity_exists = $result->rowCount();
-  if ($entity_exists) {
+
+  $database = \Drupal::database();
+
+  $result = $database->select('og_membership', 'og')
+    ->fields('og.etid')
+    ->condition('og.id',$ogid)
+    ->condition('og.entity_type','node')
+    ->execute();
+
+  $entity_exists = $result->fetchAll();
+  if (count($entity_exists) > 0) {
     foreach ($result as $record) {
       return $record->etid;
     }
@@ -633,7 +620,7 @@ function surveynodeform_node_form_redirect($form, &$form_state) {
 
 function surveynodeform_theme_registry_alter(&$theme_registry) {
 	$theme_registry['print__node__surveyform']['template'] = 'print--node--idd-survey';
-	$theme_registry['print__node__surveyform']['path'] = drupal_get_path('module', 'surveynodeform') .'/themes';
+  $theme_registry['print__node__surveyform']['path'] = \Drupal::service('extension.list.module')->getPath('surveynodeform') . "/themes";
 }
 
 
@@ -642,7 +629,7 @@ function surveynodeform_theme_registry_alter(&$theme_registry) {
 	return array(
 		'surveynodeform_form' => array(
 			'arguments' => array('form' => null),
-			'path' => drupal_get_path('module', 'surveynodeform').'/themes/',
+			'path' => \Drupal::service('extension.list.module')->getPath('surveynodeform') . "/themes",
 			'template' => 'survey-node-form', //name of your template file, it can be anything
 			'render element' => 'form'
 		)

@@ -44,3 +44,7 @@ individualform.library:
   version: 1.x
   js:
     js/individualform.js: {}
+verticaltabs.library:
+  version: 1.x
+  js:
+    js/individualform.js: {}

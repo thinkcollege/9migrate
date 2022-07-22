@@ -1,0 +1,3 @@
+  sdata_rp.processnodes:
+     class: \Drupal\sdata_rp\ProcessNodesService
+     arguments: ["@entity_type.manager"]
